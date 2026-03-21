@@ -31,20 +31,29 @@ export const Roulette: React.FC<RouletteProps> = ({ prizes, onSpinEnd, isSpinnin
 
       // Force reflow
       setTimeout(() => {
-        setDuration(5); // 5 seconds spin
+        setDuration(6); // 6 seconds for more suspense
         const targetOffset = -(stopIndex * CARD_WIDTH) + (window.innerWidth / 2) - (CARD_WIDTH / 2);
         setOffset(targetOffset);
         
-        // Haptic feedback during spin
+        // Haptic feedback during spin - escalating intensity
+        let hapticCount = 0;
         const hapticInterval = setInterval(() => {
-          tg?.HapticFeedback.impactOccurred('light');
-        }, 100);
+          hapticCount++;
+          if (hapticCount < 30) {
+            tg?.HapticFeedback.impactOccurred('light');
+          } else if (hapticCount < 50) {
+            tg?.HapticFeedback.impactOccurred('medium');
+          } else {
+            tg?.HapticFeedback.impactOccurred('heavy');
+          }
+        }, 80);
 
         setTimeout(() => {
           clearInterval(hapticInterval);
           onSpinEnd(winner);
+          // Victory haptic pattern
           tg?.HapticFeedback.notificationOccurred('success');
-        }, 5100);
+        }, 6200);
       }, 50);
     }
   }, [isSpinning, winner, prizes, onSpinEnd]);
@@ -57,7 +66,7 @@ export const Roulette: React.FC<RouletteProps> = ({ prizes, onSpinEnd, isSpinnin
         className="roulette-reel"
         style={{
           transform: `translateX(${offset}px)`,
-          transition: duration > 0 ? `transform ${duration}s cubic-bezier(0.1, 0, 0.1, 1)` : 'none'
+          transition: duration > 0 ? `transform ${duration}s cubic-bezier(0.15, 0.6, 0.2, 1)` : 'none'
         }}
       >
         {reelItems.map((item, i) => (

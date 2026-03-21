@@ -66,14 +66,21 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Glass effect for Mini App */
+/* Glass effect for Mini App - premium depth */
 .glass-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(10px);
+  background: linear-gradient(145deg, 
+    rgba(25, 35, 48, 0.95) 0%,
+    rgba(18, 26, 38, 0.98) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
   border-radius: var(--radius-m);
   padding: 16px;
   margin-bottom: 12px;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* Header design */
@@ -136,16 +143,34 @@ body {
   font-size: 15px;
 }
 
-/* Roulette redesign */
+/* Roulette redesign - exciting casino feel */
 .roulette-container {
   position: relative;
-  margin: 20px 0;
-  height: 140px;
-  background: #090e15;
-  border-radius: var(--radius-m);
-  border: 1px solid var(--line);
+  margin: 20px -16px;
+  height: 160px;
+  background: linear-gradient(180deg, #0a0f18 0%, #121a28 50%, #0a0f18 100%);
+  border-radius: 0;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
   overflow: hidden;
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+  box-shadow: 
+    inset 0 0 60px rgba(0,0,0,0.8),
+    inset 0 20px 40px -20px rgba(75, 163, 255, 0.1),
+    0 10px 40px -10px rgba(0,0,0,0.5);
+}
+
+.roulette-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(75, 163, 255, 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(244, 193, 93, 0.1), transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .roulette-pointer {
@@ -153,88 +178,158 @@ body {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 4px;
+  width: 3px;
   height: 100%;
-  background: var(--gold);
-  z-index: 5;
-  box-shadow: 0 0 10px var(--gold);
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    var(--gold) 20%,
+    var(--gold) 80%,
+    transparent 100%
+  );
+  z-index: 10;
+  box-shadow: 
+    0 0 20px var(--gold),
+    0 0 40px rgba(244, 193, 93, 0.5);
+  animation: pointerGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes pointerGlow {
+  0%, 100% { box-shadow: 0 0 20px var(--gold), 0 0 40px rgba(244, 193, 93, 0.5); }
+  50% { box-shadow: 0 0 30px var(--gold), 0 0 60px rgba(244, 193, 93, 0.7); }
+}
+
+.roulette-pointer::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 14px solid var(--gold);
+  filter: drop-shadow(0 0 8px var(--gold));
 }
 
 .roulette-pointer::after {
   content: '';
   position: absolute;
-  top: -2px;
+  bottom: -8px;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 10px solid var(--gold);
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 14px solid var(--gold);
+  filter: drop-shadow(0 0 8px var(--gold));
 }
 
 .roulette-reel {
   display: flex;
   height: 100%;
   align-items: center;
-  transition-timing-function: cubic-bezier(0.1, 0, 0.1, 1);
+  padding: 0 50vw;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
   will-change: transform;
 }
 
 .prize-card {
-  min-width: 100px;
-  height: 110px;
-  margin: 0 5px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
+  min-width: 105px;
+  height: 125px;
+  margin: 0 6px;
+  background: linear-gradient(145deg, 
+    rgba(30, 40, 55, 0.9) 0%,
+    rgba(20, 28, 40, 0.95) 100%
+  );
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px;
-  transition: all 0.3s;
+  padding: 10px 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 4px 15px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.prize-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 25px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
 .prize-emoji {
-  font-size: 32px;
-  margin-bottom: 4px;
+  font-size: 38px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  transition: transform 0.3s;
 }
 
 .prize-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .prize-rarity {
-  font-size: 10px;
-  color: var(--hint);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 3px;
+  opacity: 0.8;
 }
 
-/* Buttons */
+/* Buttons - premium feel with depth */
 .main-button {
   width: 100%;
   padding: 16px;
   border: none;
   border-radius: var(--radius-m);
-  background: var(--accent);
+  background: linear-gradient(145deg, #5eb3ff 0%, #3a8fd9 100%);
   color: white;
   font-weight: 700;
   font-size: 16px;
   margin-top: 12px;
-  box-shadow: 0 4px 15px rgba(75, 163, 255, 0.3);
-  transition: transform 0.1s;
+  box-shadow: 
+    0 4px 15px rgba(75, 163, 255, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.main-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 0.5s;
+}
+
+.main-button:hover::before {
+  left: 100%;
 }
 
 .main-button:active {
   transform: scale(0.98);
+  box-shadow: 
+    0 2px 8px rgba(75, 163, 255, 0.25),
+    inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .main-button:disabled {
-  background: var(--hint);
+  background: linear-gradient(145deg, #4a5568, #3d4555);
   box-shadow: none;
   opacity: 0.6;
 }
@@ -242,13 +337,20 @@ body {
 .secondary-button {
   width: 100%;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-m);
-  background: transparent;
+  background: linear-gradient(145deg, rgba(35, 45, 58, 0.8), rgba(25, 35, 48, 0.9));
   color: var(--text);
   font-weight: 600;
   font-size: 14px;
   margin-top: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.secondary-button:active {
+  transform: scale(0.98);
+  background: rgba(30, 40, 52, 0.9);
 }
 
 /* Navigation */
@@ -367,14 +469,63 @@ body {
   color: var(--accent);
 }
 
-/* Rarity colors */
-.rarity-common { border-color: #95a5a6; color: #95a5a6; }
-.rarity-rare { border-color: #3498db; color: #3498db; }
-.rarity-epic { border-color: #9b59b6; color: #9b59b6; }
-.rarity-legendary { border-color: #f1c40f; color: #f1c40f; box-shadow: 0 0 10px rgba(241, 196, 15, 0.3); }
+/* Rarity colors - vibrant and distinct */
+.rarity-common {
+  border-color: rgba(149, 165, 166, 0.4);
+  background: linear-gradient(145deg, rgba(40, 50, 60, 0.9), rgba(30, 40, 50, 0.95));
+}
+.rarity-common .prize-rarity { color: #95a5a6; }
 
-/* Animation */
+.rarity-rare {
+  border-color: rgba(52, 152, 219, 0.5);
+  background: linear-gradient(145deg, rgba(30, 60, 90, 0.9), rgba(20, 45, 70, 0.95));
+}
+.rarity-rare .prize-rarity { color: #3498db; }
+.rarity-rare .prize-emoji { filter: drop-shadow(0 0 8px rgba(52, 152, 219, 0.4)); }
+
+.rarity-epic {
+  border-color: rgba(155, 89, 182, 0.5);
+  background: linear-gradient(145deg, rgba(60, 40, 80, 0.9), rgba(45, 25, 65, 0.95));
+}
+.rarity-epic .prize-rarity { color: #9b59b6; }
+.rarity-epic .prize-emoji { filter: drop-shadow(0 0 10px rgba(155, 89, 182, 0.5)); }
+
+.rarity-legendary {
+  border-color: rgba(241, 196, 15, 0.6);
+  background: linear-gradient(145deg, rgba(70, 55, 25, 0.9), rgba(55, 40, 15, 0.95));
+  box-shadow: 
+    0 0 25px rgba(241, 196, 15, 0.2),
+    inset 0 0 20px rgba(241, 196, 15, 0.05);
+}
+.rarity-legendary .prize-rarity { color: #f1c40f; }
+.rarity-legendary .prize-emoji { 
+  filter: drop-shadow(0 0 12px rgba(241, 196, 15, 0.6));
+  animation: legendaryPulse 2s ease-in-out infinite;
+}
+
+@keyframes legendaryPulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(241, 196, 15, 0.6)); }
+  50% { transform: scale(1.05); filter: drop-shadow(0 0 18px rgba(241, 196, 15, 0.8)); }
+}
+
+/* Win animation */
+@keyframes winCelebrate {
+  0% { transform: scale(1); }
+  10% { transform: scale(1.1); }
+  20% { transform: scale(1); }
+  30% { transform: scale(1.05); }
+  40% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+/* Spin animation */
 @keyframes spin {
   from { transform: translateX(0); }
   to { transform: translateX(var(--target-offset)); }
+}
+
+/* Shimmer effect for buttons */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }

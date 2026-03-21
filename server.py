@@ -184,6 +184,24 @@ async def free_spin_api(request: Request) -> Dict[str, Any]:
     return {"winner": winner, "free_used": True}
 
 
+@app.post("/api/demo_spin")
+async def demo_spin_api(request: Request) -> Dict[str, Any]:
+    """Spin without payment when demo mode is enabled."""
+    user = await get_telegram_user(request)
+    flags = await runtime_state.snapshot()
+
+    if not flags["demo"]:
+        raise HTTPException(status_code=403, detail="Demo mode is disabled")
+
+    from bot import pick_prize
+
+    winner = pick_prize()
+    await db.record_spin(user["id"], winner, is_demo=True, is_free=False)
+    await db.set_spin_result_by_uid(user["id"], {"winner": winner, "is_demo": True})
+    log.info("Demo spin | uid=%s prize=%s", user["id"], winner["key"])
+    return {"winner": winner, "is_demo": True}
+
+
 @app.get("/api/spin_result")
 async def get_spin_result_api(request: Request) -> JSONResponse:
     user = await get_telegram_user(request)

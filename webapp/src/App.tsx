@@ -27,6 +27,22 @@ export const App: React.FC = () => {
 
   const handlePaidSpin = async () => {
     if (isSpinning) return;
+
+    // Demo mode: free spin without payment
+    if (boot.flags.demo) {
+      try {
+        const res = await api<{ winner: Prize; is_demo: boolean }>("demo_spin", "POST");
+        if (res.winner) {
+          setWinner(res.winner);
+          setIsSpinning(true);
+        }
+      } catch (e: any) {
+        notify(e.message || "Ошибка демо-прокрутки");
+      }
+      return;
+    }
+
+    // Normal paid spin
     try {
       const invoice = await api<{ invoice_link: string }>("create_invoice", "POST");
       tg?.openInvoice(invoice.invoice_link, async (status: string) => {
@@ -164,8 +180,9 @@ export const App: React.FC = () => {
                 className="main-button" 
                 onClick={handlePaidSpin}
                 disabled={isSpinning}
+                style={boot.flags.demo ? { background: 'linear-gradient(135deg, #ff6b6b, #ffa502)' } : undefined}
               >
-                {isSpinning ? "Крутим..." : `Крутить за ${boot.config.spin_cost} ⭐`}
+                {isSpinning ? "Крутим..." : boot.flags.demo ? "🎯 ДЕМО-СПИН" : `Крутить за ${boot.config.spin_cost} ⭐`}
               </button>
               <button 
                 className="secondary-button" 
