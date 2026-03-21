@@ -5,5 +5,3 @@ builder = "nixpacks"
 startCommand = "python run.py"
 healthcheckPath = "/api/prizes_list"
 healthcheckTimeout = 100
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 10
