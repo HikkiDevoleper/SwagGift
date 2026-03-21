@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppLogic } from './hooks/useAppLogic';
 import { Roulette } from './components/Roulette';
 import { AdminSheet } from './components/AdminSheet';
 import { tg, classNames, api, initialsOf, rankTitle, formatDate } from './utils';
-import { type Prize, type RuntimeFlags } from './types';
+import { type Prize, type RuntimeFlags, type LiveData } from './types';
 import './styles.css';
 
 export const App: React.FC = () => {
@@ -13,6 +13,7 @@ export const App: React.FC = () => {
     activeScreen,
     setActiveScreen,
     liveConnected,
+    setLiveConnected,
     notify,
     refreshUser,
     toast
@@ -22,6 +23,64 @@ export const App: React.FC = () => {
   const [winner, setWinner] = useState<Prize | undefined>();
   const [showResult, setShowResult] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [liveData, setLiveData] = useState<LiveData | null>(null);
+
+  // Real-time live updates
+  useEffect(() => {
+    const connectLive = () => {
+      const eventSource = new EventSource(`${import.meta.env.VITE_API_URL || ''}/api/live`);
+      
+      eventSource.onmessage = (event) => {
+        if (event.data && event.data !== '{}') {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.history || data.leaderboard || data.stats) {
+              setLiveData(data);
+              setLiveConnected(true);
+              // Update boot with live data
+              if (boot) {
+                setBoot({
+                  ...boot,
+                  history: data.history || boot.history,
+                  leaderboard: data.leaderboard || boot.leaderboard
+                });
+              }
+            }
+          } catch (e) {}
+        }
+      };
+      
+      eventSource.onerror = () => {
+        setLiveConnected(false);
+        eventSource.close();
+        // Reconnect after 5 seconds
+        setTimeout(connectLive, 5000);
+      };
+      
+      return eventSource;
+    };
+
+    const evt = connectLive();
+    return () => evt?.close();
+  }, [boot]);
+
+  // Maintenance mode check
+  if (boot?.flags.maint) {
+    return (
+      <div className="app-container">
+        <div className="maint-screen">
+          <div className="maint-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <h1>Технические работы</h1>
+          <p>Swagging Gift временно недоступен.<br/>Мы скоро вернёмся!</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!boot) return <div className="app-container"><div className="content-scroll">Загрузка...</div></div>;
 
@@ -197,7 +256,6 @@ export const App: React.FC = () => {
               <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>Последние выигрыши</h2>
               {boot.history.length > 0 ? boot.history.slice(0, 5).map((item, i) => (
                 <div key={`${item.won_at}-${i}`} className="list-item">
-                  <div className="list-icon">🎁</div>
                   <div className="list-content">
                     <div className="list-title">{item.first_name || item.username || "Игрок"}</div>
                     <div className="list-subtitle">{item.prize_name} • {formatDate(item.won_at)}</div>
@@ -213,7 +271,6 @@ export const App: React.FC = () => {
             <h2 style={{ margin: '0 0 12px', fontSize: '18px' }}>Мои призы</h2>
             {boot.prizes.length > 0 ? boot.prizes.map((item, i) => (
               <div key={`${item.date}-${i}`} className="list-item">
-                <div className="list-icon">🎁</div>
                 <div className="list-content">
                   <div className="list-title">{item.name}</div>
                   <div className="list-subtitle">{formatDate(item.date)}</div>
@@ -231,7 +288,7 @@ export const App: React.FC = () => {
             <h2 style={{ margin: '0 0 12px', fontSize: '18px' }}>Рейтинг игроков</h2>
             {boot.leaderboard.length > 0 ? boot.leaderboard.map((item, i) => (
               <div key={`${item.user_id}-${i}`} className="list-item">
-                <div className="list-icon" style={{ fontSize: '16px', fontWeight: 'bold' }}>{i + 1}</div>
+                <div className="list-rank">{i + 1}</div>
                 <div className="list-content">
                   <div className="list-title">{item.first_name || item.username || "Игрок"}</div>
                   <div className="list-subtitle">{item.spins} спинов</div>
@@ -246,15 +303,12 @@ export const App: React.FC = () => {
       {/* Navigation Bar */}
       <div className="nav-bar">
         <button className={classNames("nav-item", activeScreen === "spin" && "active")} onClick={() => setActiveScreen("spin")}>
-          <span className="nav-icon">🎰</span>
           <span className="nav-label">Игра</span>
         </button>
         <button className={classNames("nav-item", activeScreen === "inventory" && "active")} onClick={() => setActiveScreen("inventory")}>
-          <span className="nav-icon">🎒</span>
           <span className="nav-label">Призы</span>
         </button>
         <button className={classNames("nav-item", activeScreen === "top" && "active")} onClick={() => setActiveScreen("top")}>
-          <span className="nav-icon">🏆</span>
           <span className="nav-label">Топ</span>
         </button>
       </div>

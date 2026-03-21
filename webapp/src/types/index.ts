@@ -68,3 +68,14 @@ export type BootstrapResponse = {
   leaderboard: LeaderboardRow[];
   history: HistoryRow[];
 };
+
+export type LiveData = {
+  history?: HistoryRow[];
+  leaderboard?: LeaderboardRow[];
+  stats?: {
+    users: number;
+    spins: number;
+    stars: number;
+    wins_today: number;
+  };
+};
