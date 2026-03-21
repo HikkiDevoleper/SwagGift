@@ -95,10 +95,17 @@ class Database:
         user = await self.get_user(uid)
         return bool(user.get("free_used", 0)) if user else False
 
-    async def mark_free_used(self, uid: int) -> None:
+    async def get_global_history(self, limit: int = 20) -> List[Dict[str, Any]]:
         async with aiosqlite.connect(self.path) as db:
-            await db.execute("UPDATE users SET free_used=1 WHERE user_id=?", (uid,))
-            await db.commit()
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT p.*, u.first_name, u.username FROM prizes p "
+                "JOIN users u ON p.user_id = u.user_id "
+                "WHERE p.is_demo = 0 ORDER BY p.won_at DESC LIMIT ?", (limit,)
+            ) as cur:
+                return [dict(r) for r in await cur.fetchall()]
+
+    # Existing methods follow...
 
     async def record_spin(self, uid: int, prize: Dict[str, Any],
                           is_demo: bool = False, is_free: bool = False,
@@ -214,33 +221,26 @@ class Database:
                 return [r[0] for r in await cur.fetchall()]
 
     # Pending Spins logic
-    async def create_pending_spin(self, uid: int, charge_id: str) -> None:
+    async def set_spin_result_by_uid(self, uid: int, result: Dict[str, Any]) -> None:
         async with aiosqlite.connect(self.path) as db:
+            # We insert a new pending result for the user
             await db.execute(
-                "INSERT OR IGNORE INTO pending_spins VALUES (?,?,NULL,?)",
-                (uid, charge_id, datetime.now().isoformat())
-            )
-            await db.commit()
-
-    async def set_spin_result(self, charge_id: str, result: Dict[str, Any]) -> None:
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute(
-                "UPDATE pending_spins SET result=? WHERE charge_id=?",
-                (json.dumps(result, ensure_ascii=False), charge_id)
+                "INSERT INTO pending_spins (uid, result, created_at) VALUES (?,?,?)",
+                (uid, json.dumps(result, ensure_ascii=False), datetime.now().isoformat())
             )
             await db.commit()
 
     async def get_spin_result(self, uid: int) -> Optional[Dict[str, Any]]:
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
-                "SELECT result FROM pending_spins WHERE uid=? AND result IS NOT NULL "
+                "SELECT result, created_at FROM pending_spins WHERE uid=? AND result IS NOT NULL "
                 "ORDER BY created_at DESC LIMIT 1", (uid,)
             ) as cur:
                 row = await cur.fetchone()
                 if row and row[0]:
-                    # Delete after retrieve
+                    # Delete the one we just retrieved to avoid double-processing
                     await db.execute(
-                        "DELETE FROM pending_spins WHERE uid=? AND result IS NOT NULL", (uid,)
+                        "DELETE FROM pending_spins WHERE uid=?", (uid,)
                     )
                     await db.commit()
                     return json.loads(row[0])

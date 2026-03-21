@@ -176,9 +176,9 @@ async def on_paid(msg: Message) -> None:
     
     winner = pick_prize()
     await db.record_spin(uid, winner, stars=stars, charge_id=charge_id)
-    await db.set_spin_result(charge_id, {"winner": winner, "charge_id": charge_id})
+    await db.set_spin_result_by_uid(uid, {"winner": winner, "charge_id": charge_id})
     
-    log.info(f"ПЛАТЕЖ: User {uid} оплатил {stars}⭐. Выпал {winner['name']}")
+    log.info(f"PAYMENT: User {uid} paid {stars}⭐. Won {winner['name']}")
 
 # ══════════════════════════════════════════════════════════════════
 #  ПАНЕЛЬ ВЛАДЕЛЬЦА (ТОЛЬКО ДЛЯ БОТА)

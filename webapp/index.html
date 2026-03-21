@@ -2,79 +2,88 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Swagging Gift</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Swagging Gift Premium</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="loading" class="screen">
-        <div class="loader"></div>
-        <p>Загрузка...</p>
+            <div class="glow-circle"></div>
+            <div class="loader"></div>
+        </div>
+        <p class="loading-text">Инициализация системы...</p>
     </div>
 
-    <div id="app" style="display: none;">
-        <!-- Header / Balance -->
-        <header class="main-header">
-            <h1 class="logo">Swagging Gift</h1>
-            <div id="user-stats" class="user-info">
-                <span id="wins-count" class="stat-pill">🏆 0</span>
-                <span id="spins-count" class="stat-pill">🎰 0</span>
+    <div id="app" class="hidden-init">
+        <header class="glass-header">
+            <div class="user-profile">
+                <div class="avatar-glow" id="user-avatar">🎁</div>
+                <div class="user-meta">
+                    <h2 id="user-name">Игрок</h2>
+                    <p id="user-rank">Новичок</p>
+                </div>
+            </div>
+            <div class="stats-group">
+                <div class="stat-item">
+                    <span class="stat-label">🏆 ПОБЕД</span>
+                    <span class="stat-value" id="wins-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">🎰 СПИНОВ</span>
+                    <span class="stat-value" id="spins-count">0</span>
+                </div>
             </div>
         </header>
 
-        <!-- Main Screen -->
-        <main id="screen-main" class="screen-content">
-            <section class="wheel-section">
-                <div class="wheel-container">
-                    <div id="wheel" class="wheel">
-                        <!-- Items injected here -->
+        <main class="content">
+            <!-- Case Slider (The "Roulette") -->
+            <section class="roulette-container">
+                <div class="roulette-glow"></div>
+                <div class="roulette-marker"></div>
+                <div class="slider-viewport">
+                    <div id="slider" class="slider-track">
+                        <!-- Items will be injected here -->
                     </div>
                 </div>
-                <div class="wheel-indicator"></div>
             </section>
 
-            <section class="actions">
-                <button id="btn-spin" class="btn primary">
-                    Крутить <span class="cost">15 ⭐</span>
+            <section class="main-actions">
+                <button id="btn-spin" class="btn-premium spin-btn">
+                    <div class="btn-content">
+                        <span class="btn-text">ИСПЫТАТЬ УДАЧУ</span>
+                        <span class="btn-price">15 ⭐</span>
+                    </div>
+                    <div class="btn-shine"></div>
                 </button>
-                <button id="btn-free" class="btn secondary">
-                    🎁 Бесплатный спин
+                <button id="btn-free" class="btn-glass free-btn">
+                    <span>🎁 Бесплатный шанс</span>
                 </button>
             </section>
 
-            <section class="tabs-container">
-                <div class="tabs-header">
-                    <button class="tab-btn active" onclick="showTab('inventory')">Инвентарь</button>
-                    <button class="tab-btn" onclick="showTab('top')">Топ</button>
-                    <button class="tab-btn" onclick="showTab('rules')">Шансы</button>
-                </div>
-                <div id="tab-content" class="tab-content">
-                    <!-- Tab content injected here -->
+            <section class="tabs-system">
+                <nav class="tabs-nav">
+                    <button class="nav-item active" data-tab="inventory">ПРИЗЫ</button>
+                    <button class="nav-item" data-tab="top">ТОП</button>
+                    <button class="nav-item" data-tab="history">LIVE</button>
+                    <button class="nav-item hidden-init" data-tab="admin" id="admin-tab-btn">DEV</button>
+                </nav>
+                <div id="tab-content" class="tab-pane">
+                    <!-- Dynamic Content -->
                 </div>
             </section>
         </main>
 
-        <!-- Overlay / Animations -->
-        <div id="win-overlay" class="overlay" style="display: none;">
-            <div class="win-card">
-                <div class="confetti"></div>
-                <h2>Победа!</h2>
-                <div id="win-emoji" class="win-emoji">🎁</div>
-                <h3 id="win-name">Награда</h3>
-                <p id="win-rarity">Раритетность</p>
-                <div class="win-desc">Предмет добавлен в инвентарь или придёт подарком!</div>
-                <button class="btn primary" onclick="closeOverlay()">Отлично!</button>
-            </div>
-        </div>
-
-        <div id="lose-overlay" class="overlay" style="display: none;">
-            <div class="lose-card">
-                <h2>Пусто</h2>
-                <div class="lose-emoji">💀</div>
-                <p>Барабан не выдал приз. Попробуйте еще раз!</p>
-                <button class="btn secondary" onclick="closeOverlay()">Понял</button>
+        <div id="overlay" class="modal-overlay hidden-init">
+            <div class="modal-content">
+                <div id="result-glow" class="result-glow"></div>
+                <div class="modal-header">ВЫИГРЫШ!</div>
+                <div id="result-emoji" class="result-emoji">🎁</div>
+                <div id="result-name" class="result-name">Название</div>
+                <div id="result-rarity" class="result-rarity">РАРИТЕТНОСТЬ</div>
+                <p class="result-note">Предмет успешно зачислен в ваш профиль.</p>
+                <button class="btn-premium" onclick="closeOverlay()">ЗАБРАТЬ</button>
             </div>
         </div>
     </div>
