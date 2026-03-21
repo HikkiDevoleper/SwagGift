@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict
 from urllib.parse import parse_qsl
 
@@ -23,6 +24,7 @@ log = logging.getLogger("swagging_gift.server")
 app = FastAPI(title="Swagging Gift")
 db = Database(DB_PATH)
 bot_instance = AiogramBot(token=TOKEN)
+WEB_ROOT = Path("webapp/dist")
 
 app.add_middleware(
     CORSMiddleware,
@@ -264,4 +266,8 @@ async def toggle_setting_api(request: Request) -> Dict[str, Any]:
     return {"ok": True, "key": key, "value": value}
 
 
-app.mount("/", StaticFiles(directory="webapp", html=True), name="webapp")
+app.mount(
+    "/",
+    StaticFiles(directory=str(WEB_ROOT if WEB_ROOT.exists() else Path("webapp")), html=True),
+    name="webapp",
+)
