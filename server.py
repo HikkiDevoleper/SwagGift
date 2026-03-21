@@ -28,7 +28,9 @@ app.add_middleware(
 )
 
 def verify_init_data(init_data_raw: str, bot_token: str) -> dict:
+    log.info(f"Verifying init data: {init_data_raw[:20]}...")
     if not init_data_raw:
+        log.error("Init data is missing in headers")
         raise HTTPException(401, "No init data")
     
     params = {}
@@ -70,6 +72,7 @@ async def startup():
 @app.get("/api/user")
 async def get_user_api(request: Request):
     init_data = request.headers.get("X-Telegram-Init-Data", "")
+    log.info(f"X-Telegram-Init-Data header: {len(init_data)} chars")
     user = verify_init_data(init_data, TOKEN)
     uid = user["id"]
     

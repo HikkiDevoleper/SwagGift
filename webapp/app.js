@@ -18,7 +18,7 @@ async function api(endpoint, method = "GET", body = null) {
         method,
         headers: {
             "Content-Type": "application/json",
-            "X-Telegram-Init-Data": initData
+            "X-Telegram-Init-Data": tg.initData || ""
         },
         body: body ? JSON.stringify(body) : null
     });
@@ -28,11 +28,21 @@ async function api(endpoint, method = "GET", body = null) {
 
 // Initialization
 async function init() {
+    console.log("Mini App initialization started");
+    console.log("initData length:", tg.initData ? tg.initData.length : 0);
+    
+    // Sometimes initData takes a moment
+    if (!tg.initData && tg.initDataUnsafe && Object.keys(tg.initDataUnsafe).length === 0) {
+        console.warn("initData is empty, waiting 500ms...");
+        await new Promise(r => setTimeout(r, 500));
+    }
+
     try {
         const [userData, prizesData] = await Promise.all([
             api("user"),
             api("prizes_list")
         ]);
+        console.log("User and prizes loaded successfully");
         
         user = userData.user;
         prizesList = prizesData.prizes;
