@@ -15,9 +15,10 @@
   --success: #5fcf80;
   --danger: #ff8a7a;
   --shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
-  --shell-width: min(100vw - 16px, 430px);
-  --roulette-card-width: 112px;
-  --roulette-gap: 12px;
+  --shell-width: min(430px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  --roulette-card-width: 96px;
+  --roulette-gap: 8px;
+  --roulette-side-padding: 88px;
 }
 
 * {
@@ -57,7 +58,11 @@ select {
 .miniapp-shell {
   position: relative;
   min-height: 100dvh;
-  padding: max(10px, env(safe-area-inset-top)) 0 calc(92px + env(safe-area-inset-bottom));
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    calc(92px + env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
 }
 
 .miniapp-shell--loading {
@@ -136,7 +141,7 @@ select {
 
 .header-sheet {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .header-row,
@@ -224,7 +229,7 @@ select {
 .screen-stack,
 .owner-grid,
 .compact-list {
-  gap: 10px;
+  gap: 8px;
 }
 
 .header-status {
@@ -282,17 +287,21 @@ select {
 
 .screen-stack {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .section-top {
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .section-top--stack {
   align-items: flex-start;
   flex-direction: column;
+}
+
+.section-top--tight {
+  margin-bottom: 10px;
 }
 
 .section-kicker {
@@ -303,7 +312,7 @@ select {
 }
 
 .section-title {
-  font-size: 1.2rem;
+  font-size: 1.12rem;
   font-weight: 800;
 }
 
@@ -312,8 +321,8 @@ select {
 }
 
 .section-caption {
-  margin: 4px 0 0;
-  font-size: 0.92rem;
+  margin: 2px 0 0;
+  font-size: 0.86rem;
   line-height: 1.45;
 }
 
@@ -328,13 +337,16 @@ select {
 
 .roulette-shell {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-height: 168px;
   overflow: hidden;
-  min-height: 190px;
-  padding: 18px 0;
+  padding: 14px 0;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03)),
     rgba(255, 255, 255, 0.02);
+  isolation: isolate;
 }
 
 .roulette-shell::before,
@@ -343,7 +355,7 @@ select {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 36px;
+  width: 24px;
   z-index: 2;
 }
 
@@ -360,8 +372,8 @@ select {
 .roulette-marker {
   position: absolute;
   left: 50%;
-  top: 10px;
-  bottom: 10px;
+  top: 12px;
+  bottom: 12px;
   width: 2px;
   transform: translateX(-50%);
   background: linear-gradient(180deg, transparent, var(--gold), transparent);
@@ -372,8 +384,10 @@ select {
 .roulette-track {
   display: flex;
   align-items: center;
+  width: max-content;
+  min-width: 100%;
   gap: var(--roulette-gap);
-  padding: 0 calc(50% - var(--roulette-card-width) / 2);
+  padding: 0 var(--roulette-side-padding);
   transition-property: transform;
   transition-timing-function: cubic-bezier(0.08, 0.7, 0.05, 1);
   will-change: transform;
@@ -381,13 +395,13 @@ select {
 
 .roulette-card {
   width: var(--roulette-card-width);
-  min-height: 132px;
+  min-height: 116px;
   flex: 0 0 var(--roulette-card-width);
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 6px;
-  padding: 14px 10px;
+  gap: 4px;
+  padding: 12px 8px;
   text-align: center;
   border: 1px solid color-mix(in srgb, var(--roulette-border), transparent 28%);
   background:
@@ -397,28 +411,30 @@ select {
 }
 
 .roulette-card__emoji {
-  font-size: 2rem;
+  font-size: 1.8rem;
   line-height: 1;
 }
 
 .roulette-card strong {
-  font-size: 0.95rem;
+  font-size: 0.84rem;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .roulette-card span:last-child {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .cta-column {
   display: grid;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .primary-cta,
 .secondary-cta {
-  min-height: 52px;
+  min-height: 48px;
   border: 1px solid var(--line);
   padding: 0 16px;
   color: var(--text);
@@ -571,7 +587,7 @@ select {
 }
 
 .bottom-nav__button {
-  min-height: 58px;
+  min-height: 54px;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -685,7 +701,7 @@ select {
 .result-sheet__emoji {
   position: relative;
   z-index: 1;
-  font-size: 4.2rem;
+  font-size: 3.8rem;
   margin: 8px 0 10px;
 }
 
@@ -720,12 +736,6 @@ select {
   box-shadow: var(--shadow);
   text-align: center;
   z-index: 40;
-}
-
-@media (min-width: 431px) {
-  :root {
-    --roulette-card-width: 116px;
-  }
 }
 
 @media (min-width: 768px) {

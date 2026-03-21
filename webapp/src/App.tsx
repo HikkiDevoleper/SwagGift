@@ -56,6 +56,12 @@ type RuntimeFlags = {
   testpay: boolean;
 };
 
+type ReelLayout = {
+  cardWidth: number;
+  gap: number;
+  sidePadding: number;
+};
+
 type BootstrapResponse = {
   user: User;
   prizes: InventoryItem[];
@@ -182,12 +188,18 @@ export function App() {
   const [reelItems, setReelItems] = useState<Prize[]>([]);
   const [reelOffset, setReelOffset] = useState(0);
   const [reelDuration, setReelDuration] = useState("0ms");
+  const [reelLayout, setReelLayout] = useState<ReelLayout>({
+    cardWidth: 96,
+    gap: 8,
+    sidePadding: 88,
+  });
   const [result, setResult] = useState<Prize | null>(null);
   const [resultNote, setResultNote] = useState("");
   const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
   const pollingRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const reelTrackRef = useRef<HTMLDivElement | null>(null);
+  const reelViewportRef = useRef<HTMLDivElement | null>(null);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -237,11 +249,11 @@ export function App() {
     const track = reelTrackRef.current;
     if (!track) return 0;
     const firstCard = track.querySelector<HTMLElement>("[data-roulette-card='true']");
-    const cardWidth = firstCard?.offsetWidth ?? 112;
+    const cardWidth = firstCard?.offsetWidth ?? reelLayout.cardWidth;
     const styles = window.getComputedStyle(track);
-    const gap = parseFloat(styles.columnGap || styles.gap || "12") || 12;
+    const gap = parseFloat(styles.columnGap || styles.gap || String(reelLayout.gap)) || reelLayout.gap;
     return -1 * stopIndex * (cardWidth + gap);
-  }, []);
+  }, [reelLayout.cardWidth, reelLayout.gap]);
 
   const animateSpin = useCallback(async (winner: Prize, isDemo: boolean) => {
     if (!boot) return;
@@ -277,8 +289,8 @@ export function App() {
     setResult(winner);
     setResultNote(
       isDemo
-        ? "Сейчас включён тестовый режим. Предмет записан как тестовый выигрыш."
-        : "Предмет уже добавлен в профиль и появился в списке призов."
+        ? "Тестовый выигрыш сохранён."
+        : "Приз уже в профиле."
     );
     setActiveScreen("inventory");
   }, [boot, measureSpinOffset, refreshUser, notify]);
@@ -415,6 +427,53 @@ export function App() {
   }, [boot, applyLiveSnapshot]);
 
   useEffect(() => {
+    if (!boot) return;
+
+    const viewport = reelViewportRef.current;
+    if (!viewport) return;
+
+    const updateLayout = () => {
+      const width = viewport.clientWidth || 320;
+      const nextGap = width < 360 ? 8 : 10;
+      const nextCardWidth = Math.max(84, Math.min(104, Math.floor((width - 28) / 2.35)));
+      const nextSidePadding = Math.max(12, Math.floor((width - nextCardWidth) / 2));
+
+      setReelLayout((current) => {
+        if (
+          current.cardWidth === nextCardWidth &&
+          current.gap === nextGap &&
+          current.sidePadding === nextSidePadding
+        ) {
+          return current;
+        }
+
+        return {
+          cardWidth: nextCardWidth,
+          gap: nextGap,
+          sidePadding: nextSidePadding,
+        };
+      });
+    };
+
+    updateLayout();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(updateLayout);
+      observer.observe(viewport);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", updateLayout);
+    return () => window.removeEventListener("resize", updateLayout);
+  }, [boot]);
+
+  useEffect(() => {
+    if (!spinning) {
+      setReelOffset(0);
+    }
+  }, [reelLayout, spinning]);
+
+  useEffect(() => {
     return () => {
       if (pollingRef.current) {
         window.clearInterval(pollingRef.current);
@@ -428,6 +487,11 @@ export function App() {
 
   const screenIndex = screens.findIndex((screen) => screen.key === activeScreen);
   const currentResultTheme = result ? rarityTheme[result.rarity] ?? rarityTheme["Промах"] : rarityTheme["Промах"];
+  const reelStyle = {
+    "--roulette-card-width": `${reelLayout.cardWidth}px`,
+    "--roulette-gap": `${reelLayout.gap}px`,
+    "--roulette-side-padding": `${reelLayout.sidePadding}px`,
+  } as CSSProperties;
 
   return (
     <div className="miniapp-shell">
@@ -455,6 +519,8 @@ export function App() {
                 reelOffset={reelOffset}
                 reelDuration={reelDuration}
                 reelTrackRef={reelTrackRef}
+                reelViewportRef={reelViewportRef}
+                reelStyle={reelStyle}
                 onPaidSpin={() => runPaidSpin()}
                 onFreeSpin={() => runFreeSpin()}
               />
@@ -536,7 +602,7 @@ function HeaderSheet({
         </div>
         {isOwner && (
           <button type="button" className="owner-button" onClick={onOwnerOpen}>
-            Управление
+            Админ
           </button>
         )}
       </div>
@@ -562,6 +628,8 @@ function SpinScreen({
   reelOffset,
   reelDuration,
   reelTrackRef,
+  reelViewportRef,
+  reelStyle,
   onPaidSpin,
   onFreeSpin,
 }: {
@@ -571,21 +639,20 @@ function SpinScreen({
   reelOffset: number;
   reelDuration: string;
   reelTrackRef: RefObject<HTMLDivElement | null>;
+  reelViewportRef: RefObject<HTMLDivElement | null>;
+  reelStyle: CSSProperties;
   onPaidSpin: () => void;
   onFreeSpin: () => void;
 }) {
   return (
     <div className="screen-stack">
       <section className="spin-sheet facet-card">
-        <div className="section-top">
-          <div>
-            <p className="section-kicker">Главный экран</p>
-            <h2 className="section-title">Крутить рулетку</h2>
-          </div>
+        <div className="section-top section-top--tight">
+          <h2 className="section-title">Рулетка</h2>
           <div className="price-chip">{boot.config.spin_cost}⭐</div>
         </div>
 
-        <div className="roulette-shell">
+        <div ref={reelViewportRef} className="roulette-shell" style={reelStyle}>
           <div className="roulette-marker" />
           <div
             ref={reelTrackRef}
@@ -620,22 +687,19 @@ function SpinScreen({
             Крутить за {boot.config.spin_cost} ⭐
           </button>
           <button type="button" className="secondary-cta" disabled={spinning || boot.free_used} onClick={onFreeSpin}>
-            {boot.free_used ? "Бесплатный шанс уже взят" : "Бесплатный шанс"}
+            {boot.free_used ? "Бесплатно недоступно" : "Бесплатно"}
           </button>
         </div>
       </section>
 
       <section className="preview-sheet facet-card facet-card--soft">
-        <div className="section-top">
-          <div>
-            <p className="section-kicker">Сейчас в ленте</p>
-            <h2 className="section-title section-title--small">Последние выигрыши</h2>
-          </div>
+        <div className="section-top section-top--tight">
+          <h2 className="section-title section-title--small">Лента</h2>
         </div>
 
         <div className="compact-list">
           {boot.history.length ? (
-            boot.history.slice(0, 3).map((item, index) => {
+            boot.history.slice(0, 2).map((item, index) => {
               const found = boot.prizes_catalog.find(
                 (prize) => prize.key === item.prize_key || prize.name === item.prize_name
               );
@@ -667,7 +731,7 @@ function SpinScreen({
 
 function HistoryScreen({ history, catalog }: { history: HistoryRow[]; catalog: Prize[] }) {
   return (
-    <ScreenSection title="Лента" subtitle="Последние выигрыши игроков">
+    <ScreenSection title="Лента" subtitle="Последние призы">
       <div className="list-stack">
         {history.length ? (
           history.map((item, index) => {
@@ -702,7 +766,7 @@ function InventoryScreen({
   catalog: Prize[];
 }) {
   return (
-    <ScreenSection title="Профиль" subtitle={`${user.first_name || user.username || "Игрок"} • ${rankTitle(user.wins)}`}>
+    <ScreenSection title="Призы" subtitle={`${user.first_name || user.username || "Игрок"} • ${rankTitle(user.wins)}`}>
       <div className="profile-banner facet-card facet-card--soft">
         <div className="profile-banner__item">
           <span>Победы</span>
@@ -750,7 +814,7 @@ function InventoryScreen({
 
 function TopScreen({ leaderboard }: { leaderboard: LeaderboardRow[] }) {
   return (
-    <ScreenSection title="Рейтинг" subtitle="Лидеры по победам">
+    <ScreenSection title="Рейтинг" subtitle="По победам">
       <div className="list-stack">
         {leaderboard.length ? (
           leaderboard.map((item, index) => (
@@ -785,8 +849,7 @@ function ScreenSection({
   return (
     <div className="screen-stack">
       <section className="section-sheet facet-card">
-        <div className="section-top section-top--stack">
-          <p className="section-kicker">{title}</p>
+        <div className="section-top section-top--stack section-top--tight">
           <h2 className="section-title">{title}</h2>
           <p className="section-caption">{subtitle}</p>
         </div>
@@ -891,17 +954,14 @@ function OwnerSheet({
       <div className="sheet-overlay__backdrop" onClick={onClose} />
       <section className="bottom-sheet facet-card">
         <div className="sheet-head">
-          <div>
-            <p className="section-kicker">Владелец</p>
-            <h2 className="section-title section-title--small">Управление</h2>
-          </div>
+          <h2 className="section-title section-title--small">Админ</h2>
           <button type="button" className="sheet-close" onClick={onClose}>
             Закрыть
           </button>
         </div>
 
         <div className="owner-summary facet-card facet-card--soft">
-          <span>Владелец {user.user_id}</span>
+          <span>ID {user.user_id}</span>
           <strong>{spinCost}⭐ за спин</strong>
         </div>
 
@@ -949,7 +1009,7 @@ function ResultSheet({
       <div className="sheet-overlay__backdrop" onClick={onClose} />
       <section className="bottom-sheet bottom-sheet--result facet-card" style={{ borderColor: `${theme.border}70` }}>
         <div className="result-sheet__aura" style={{ background: theme.glow }} />
-        <p className="section-kicker">Результат</p>
+        <p className="section-kicker">Выигрыш</p>
         <div className="result-sheet__emoji">{result.emoji}</div>
         <h2 className="section-title section-title--small">{result.name}</h2>
         <p className="result-sheet__rarity" style={{ color: theme.border }}>
