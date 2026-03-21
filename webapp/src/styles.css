@@ -141,46 +141,21 @@ select {
 
 .header-sheet {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  padding: 18px;
 }
 
-.header-row,
-.brand-row,
-.header-status,
-.stats-grid,
-.section-top,
-.compact-row,
-.list-card,
-.profile-banner,
-.sheet-head,
-.owner-summary,
-.owner-toggle {
+.header-row {
   display: flex;
-}
-
-.header-row,
-.section-top,
-.sheet-head {
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .brand-row {
+  display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.avatar-mark {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, rgba(75, 163, 255, 0.22), rgba(255, 255, 255, 0.06));
-  border: 1px solid var(--line-strong);
-  color: var(--text);
-  font-size: 1rem;
-  font-weight: 800;
-  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  gap: 14px;
 }
 
 .app-title,
@@ -339,14 +314,15 @@ select {
   position: relative;
   width: 100%;
   max-width: 100%;
-  min-height: 168px;
+  min-height: 180px;
   overflow: hidden;
-  padding: 14px 0;
+  padding: 16px 0;
   border: 1px solid var(--line);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03)),
-    rgba(255, 255, 255, 0.02);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(20, 30, 42, 0.8);
   isolation: isolate;
+  border-radius: 12px;
 }
 
 .roulette-shell::before,
@@ -395,19 +371,20 @@ select {
 
 .roulette-card {
   width: var(--roulette-card-width);
-  min-height: 116px;
+  min-height: 124px;
   flex: 0 0 var(--roulette-card-width);
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 4px;
-  padding: 12px 8px;
+  gap: 6px;
+  padding: 14px 10px;
   text-align: center;
-  border: 1px solid color-mix(in srgb, var(--roulette-border), transparent 28%);
+  border: 2px solid color-mix(in srgb, var(--roulette-border), transparent 40%);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
     radial-gradient(circle at top, var(--roulette-glow), transparent 68%);
   clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  transition: transform 0.2s ease;
 }
 
 .roulette-card__emoji {
@@ -463,6 +440,7 @@ select {
 }
 
 .compact-row {
+  display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 0;

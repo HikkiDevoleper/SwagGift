@@ -13,11 +13,8 @@ from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
-    KeyboardButton,
-    MenuButtonWebApp,
     Message,
     PreCheckoutQuery,
-    ReplyKeyboardMarkup,
     WebAppInfo,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -214,19 +211,22 @@ async def cmd_start(message: Message) -> None:
     user = message.from_user
     await db.ensure_user(user.id, user.username or "", user.first_name or "")
 
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))]
-        ],
-        resize_keyboard=True,
+    # Inline keyboard with WebApp button matching screenshot design
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="🎰 Играть в рулетку",
+            web_app=WebAppInfo(url=WEBAPP_URL)
+        )
     )
+
     await message.answer(
         (
-            "<b>Swagging Gift</b>\n\n"
-            "Крути рулетку, забирай подарки Telegram и следи за лайв-лентой прямо в Mini App.\n"
-            f"Если что, пиши владельцу: @{OWNER_USERNAME}"
+            "🎁 <b>Swagging Gift</b>\n\n"
+            "Крутите барабан и выигрывайте настоящие Telegram-подарки!\n\n"
+            "Жмите кнопку ниже чтобы открыть приложение 👇"
         ),
-        reply_markup=keyboard,
+        reply_markup=builder.as_markup(),
     )
 
 
@@ -478,9 +478,6 @@ async def main() -> None:
             types.BotCommand(command="start", description="Открыть главное меню"),
             types.BotCommand(command="admin", description="Панель владельца"),
         ]
-    )
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))
     )
     log.info("Bot started | spin_cost=%s | webapp=%s | channel=%s", SPIN_COST, WEBAPP_URL, CHANNEL_URL)
     await dp.start_polling(bot)
