@@ -20,15 +20,35 @@ export async function api<T>(endpoint: string, method = "GET", body?: unknown): 
   return data as T;
 }
 
+const RARITY_MAP: Record<string, string> = {
+  "Обычный": "common",
+  "Редкий": "rare",
+  "Эпический": "epic",
+  "Легендарный": "legendary",
+  "Промах": "miss",
+  // English fallbacks
+  "common": "common",
+  "rare": "rare",
+  "epic": "epic",
+  "legendary": "legendary",
+  "miss": "miss",
+};
+
+export function rarityClass(rarity: string): string {
+  return RARITY_MAP[rarity] || "common";
+}
+
 export function makeReel(prizes: Prize[], winner?: Prize) {
+  if (!prizes.length) return { reel: [], stopIndex: 0 };
+
   const reel: Prize[] = [];
-  const stopIndex = 44;
-  for (let index = 0; index < 60; index += 1) {
-    const prize =
-      winner && index === stopIndex
-        ? winner
-        : prizes[Math.floor(Math.random() * prizes.length)];
-    reel.push(prize);
+  const stopIndex = 42;
+  for (let i = 0; i < 55; i++) {
+    if (winner && i === stopIndex) {
+      reel.push(winner);
+    } else {
+      reel.push(prizes[Math.floor(Math.random() * prizes.length)]);
+    }
   }
   return { reel, stopIndex };
 }
@@ -59,6 +79,6 @@ export function formatDate(value: string) {
   }
 }
 
-export const classNames = (...values: Array<string | false | null | undefined>) => {
+export function cn(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
-};
+}

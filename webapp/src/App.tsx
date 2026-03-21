@@ -1,80 +1,106 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppLogic } from './hooks/useAppLogic';
 import { Roulette } from './components/Roulette';
 import { AdminSheet } from './components/AdminSheet';
-import { tg, classNames, api, initialsOf, rankTitle, formatDate } from './utils';
+import { tg, cn, api, initialsOf, rankTitle, rarityClass, formatDate } from './utils';
 import { type Prize, type RuntimeFlags, type LiveData } from './types';
 import './styles.css';
 
+/* ── SVG Nav Icons (inline, minimal) ─────────────── */
+
+const IconDice = () => (
+  <svg viewBox="0 0 24 24">
+    <rect x="3" y="3" width="18" height="18" rx="3" />
+    <circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="15.5" cy="8.5" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="8.5" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="15.5" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const IconGift = () => (
+  <svg viewBox="0 0 24 24">
+    <rect x="3" y="11" width="18" height="10" rx="2" />
+    <rect x="5" y="7" width="14" height="4" rx="1" />
+    <path d="M12 7v14" />
+    <path d="M12 7c-1.5-2-4-3-5-2s0 3.5 5 2" />
+    <path d="M12 7c1.5-2 4-3 5-2s0 3.5-5 2" />
+  </svg>
+);
+
+const IconTrophy = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M6 9a6 6 0 0 0 12 0V4H6v5z" />
+    <path d="M6 4H4a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3" />
+    <path d="M18 4h2a1 1 0 0 1 1 1v2a3 3 0 0 1-3 3" />
+    <path d="M12 15v3" />
+    <path d="M8 21h8" />
+    <path d="M12 18h0" />
+  </svg>
+);
+
 export const App: React.FC = () => {
   const {
-    boot,
-    setBoot,
-    activeScreen,
-    setActiveScreen,
-    liveConnected,
-    setLiveConnected,
-    notify,
-    refreshUser,
-    toast
+    boot, setBoot,
+    activeScreen, setActiveScreen,
+    liveConnected, setLiveConnected,
+    notify, refreshUser, toast
   } = useAppLogic();
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState<Prize | undefined>();
   const [showResult, setShowResult] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [liveData, setLiveData] = useState<LiveData | null>(null);
+  const liveRef = useRef<EventSource | null>(null);
 
-  // Real-time live updates
+  // ── SSE live feed ──────────────────────────────────
   useEffect(() => {
-    const connectLive = () => {
-      const eventSource = new EventSource(`${import.meta.env.VITE_API_URL || ''}/api/live`);
-      
-      eventSource.onmessage = (event) => {
-        if (event.data && event.data !== '{}') {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.history || data.leaderboard || data.stats) {
-              setLiveData(data);
-              setLiveConnected(true);
-              // Update boot with live data
-              if (boot) {
-                setBoot({
-                  ...boot,
-                  history: data.history || boot.history,
-                  leaderboard: data.leaderboard || boot.leaderboard
-                });
-              }
-            }
-          } catch (e) {}
-        }
-      };
-      
-      eventSource.onerror = () => {
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    const connect = () => {
+      es = new EventSource(`${import.meta.env.VITE_API_URL || ''}/api/live`);
+      liveRef.current = es;
+
+      es.addEventListener('snapshot', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          setLiveConnected(true);
+          if (boot) {
+            setBoot(prev => prev ? {
+              ...prev,
+              history: data.history || prev.history,
+              leaderboard: data.leaderboard || prev.leaderboard,
+            } : prev);
+          }
+        } catch {}
+      });
+
+      es.onerror = () => {
         setLiveConnected(false);
-        eventSource.close();
-        // Reconnect after 5 seconds
-        setTimeout(connectLive, 5000);
+        es?.close();
+        reconnectTimer = setTimeout(connect, 5000);
       };
-      
-      return eventSource;
     };
 
-    const evt = connectLive();
-    return () => evt?.close();
-  }, [boot]);
+    if (boot) connect();
 
-  // Maintenance mode check
+    return () => {
+      es?.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, [!!boot]);
+
+  // ── Maintenance screen ─────────────────────────────
   if (boot?.flags.maint) {
     return (
       <div className="app-container">
         <div className="maint-screen">
-          <div className="maint-icon">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-          </div>
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+          </svg>
           <h1>Технические работы</h1>
           <p>Swagging Gift временно недоступен.<br/>Мы скоро вернёмся!</p>
         </div>
@@ -82,12 +108,19 @@ export const App: React.FC = () => {
     );
   }
 
-  if (!boot) return <div className="app-container"><div className="content-scroll">Загрузка...</div></div>;
+  // ── Loading state ──────────────────────────────────
+  if (!boot) {
+    return (
+      <div className="app-container">
+        <div className="loading-screen">Загрузка...</div>
+      </div>
+    );
+  }
 
+  // ── Paid / Demo spin ───────────────────────────────
   const handlePaidSpin = async () => {
     if (isSpinning) return;
 
-    // Demo mode: free spin without payment
     if (boot.flags.demo) {
       try {
         const res = await api<{ winner: Prize; is_demo: boolean }>("demo_spin", "POST");
@@ -101,7 +134,6 @@ export const App: React.FC = () => {
       return;
     }
 
-    // Normal paid spin
     try {
       const invoice = await api<{ invoice_link: string }>("create_invoice", "POST");
       tg?.openInvoice(invoice.invoice_link, async (status: string) => {
@@ -114,20 +146,17 @@ export const App: React.FC = () => {
                 setWinner(res.result.winner);
                 setIsSpinning(true);
               }
-            } catch (e) {
-              console.error("Polling error:", e);
-            }
-          }, 2000);
-          
-          // Safety timeout for polling
+            } catch {}
+          }, 1500);
           setTimeout(() => clearInterval(poll), 60000);
         }
       });
     } catch (e: any) {
-      notify(e.message || "Ошибка при создании счета");
+      notify(e.message || "Ошибка при создании счёта");
     }
   };
 
+  // ── Free spin ──────────────────────────────────────
   const handleFreeSpin = async () => {
     if (isSpinning || boot.free_used) return;
     try {
@@ -148,36 +177,35 @@ export const App: React.FC = () => {
     }
   };
 
+  // ── Admin toggle ───────────────────────────────────
   const handleToggleFlag = async (key: keyof RuntimeFlags) => {
     try {
       const res = await api<{ value: boolean }>("admin/toggle", "POST", { key });
-      if (boot) {
-        setBoot({
-          ...boot,
-          flags: { ...boot.flags, [key]: res.value }
-        });
-        notify(`Настройка ${key} изменена на ${res.value ? 'ВКЛ' : 'ВЫКЛ'}`);
-      }
+      setBoot(prev => prev ? { ...prev, flags: { ...prev.flags, [key]: res.value } } : prev);
+      notify(`${key}: ${res.value ? 'ВКЛ' : 'ВЫКЛ'}`);
     } catch (e: any) {
-      notify(e.message || "Ошибка при изменении настройки");
+      notify(e.message || "Ошибка");
     }
   };
 
+  // ── Spin end ───────────────────────────────────────
   const onSpinEnd = (wonPrize: Prize) => {
     setIsSpinning(false);
     if (wonPrize.type !== 'nothing') {
       setShowResult(true);
     } else {
-      notify("В этот раз ничего не выпало...");
+      notify("В этот раз не повезло...");
     }
     refreshUser();
   };
 
+  // ── Render ─────────────────────────────────────────
   return (
     <div className="app-container">
       <div className="content-scroll">
-        {/* Header Section */}
-        <div className="glass-card">
+
+        {/* ── Profile Card ─────────────────────────── */}
+        <div className="card">
           <div className="profile-header">
             <div className="avatar">{initialsOf(boot.user)}</div>
             <div className="user-info">
@@ -185,25 +213,18 @@ export const App: React.FC = () => {
               <p>{rankTitle(boot.user.wins)}</p>
             </div>
             {boot.is_owner && (
-              <button 
-                className="secondary-button" 
-                style={{ width: 'auto', marginTop: 0, marginLeft: 'auto', padding: '6px 12px' }}
-                onClick={() => setShowAdmin(true)}
-              >
-                Админ
-              </button>
+              <button className="btn-small" onClick={() => setShowAdmin(true)}>Админ</button>
             )}
           </div>
-          
-          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-            <div className={classNames("status-chip", liveConnected && "status-chip--active")} 
-                 style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '4px', background: liveConnected ? 'rgba(95,207,128,0.1)' : 'rgba(255,255,255,0.05)', color: liveConnected ? '#5fcf80' : '#97a6b6' }}>
-              {liveConnected ? "● Лента активна" : "○ Лента ждет"}
-            </div>
-            <div className="status-chip" 
-                 style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '4px', background: boot.free_used ? 'rgba(255,255,255,0.05)' : 'rgba(75,163,255,0.1)', color: boot.free_used ? '#97a6b6' : '#4ba3ff' }}>
+
+          <div className="badges-row">
+            <span className={cn("badge", liveConnected ? "badge--live" : "badge--used")}>
+              {liveConnected ? "● Live" : "○ Offline"}
+            </span>
+            <span className={cn("badge", boot.free_used ? "badge--used" : "badge--free")}>
               {boot.free_used ? "Шанс использован" : "Шанс доступен"}
-            </div>
+            </span>
+            {boot.flags.demo && <span className="badge badge--demo">ДЕМО</span>}
           </div>
 
           <div className="stats-row">
@@ -222,29 +243,37 @@ export const App: React.FC = () => {
           </div>
         </div>
 
+        {/* ── Spin Screen ──────────────────────────── */}
         {activeScreen === "spin" && (
           <>
-            <div className="glass-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h2 style={{ margin: 0, fontSize: '18px' }}>Рулетка</h2>
-                <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--gold)' }}>{boot.config.spin_cost}⭐</div>
+            <div className="card">
+              <div className="section-header">
+                <h2 className="section-title">Рулетка</h2>
+                <span className="section-badge">{boot.config.spin_cost} ⭐</span>
               </div>
-              <Roulette 
-                prizes={boot.prizes_catalog} 
-                isSpinning={isSpinning} 
-                winner={winner} 
-                onSpinEnd={onSpinEnd} 
+
+              <Roulette
+                prizes={boot.prizes_catalog}
+                isSpinning={isSpinning}
+                winner={winner}
+                onSpinEnd={onSpinEnd}
               />
-              <button 
-                className="main-button" 
+
+              <button
+                className={cn("btn-spin", boot.flags.demo && "btn-spin--demo")}
                 onClick={handlePaidSpin}
                 disabled={isSpinning}
-                style={boot.flags.demo ? { background: 'linear-gradient(135deg, #ff6b6b, #ffa502)' } : undefined}
               >
-                {isSpinning ? "Крутим..." : boot.flags.demo ? "🎯 ДЕМО-СПИН" : `Крутить за ${boot.config.spin_cost} ⭐`}
+                {isSpinning
+                  ? "Крутим..."
+                  : boot.flags.demo
+                    ? "ДЕМО-СПИН"
+                    : `Крутить за ${boot.config.spin_cost} ⭐`
+                }
               </button>
-              <button 
-                className="secondary-button" 
+
+              <button
+                className="btn-secondary"
                 onClick={handleFreeSpin}
                 disabled={isSpinning || boot.free_used}
               >
@@ -252,94 +281,119 @@ export const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="glass-card">
-              <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>Последние выигрыши</h2>
-              {boot.history.length > 0 ? boot.history.slice(0, 5).map((item, i) => (
-                <div key={`${item.won_at}-${i}`} className="list-item">
-                  <div className="list-content">
-                    <div className="list-title">{item.first_name || item.username || "Игрок"}</div>
-                    <div className="list-subtitle">{item.prize_name} • {formatDate(item.won_at)}</div>
-                  </div>
-                </div>
-              )) : <p style={{ textAlign: 'center', color: 'var(--hint)', fontSize: '14px' }}>История пока пуста</p>}
+            {/* Recent Wins */}
+            <div className="card">
+              <div className="section-header">
+                <h2 className="section-title">Последние выигрыши</h2>
+              </div>
+              {boot.history.length > 0
+                ? boot.history.slice(0, 6).map((item, i) => (
+                    <div key={`${item.won_at}-${i}`} className="list-item">
+                      <div className="list-content">
+                        <div className="list-title">{item.first_name || item.username || "Игрок"}</div>
+                        <div className="list-subtitle">{item.prize_name} · {formatDate(item.won_at)}</div>
+                      </div>
+                    </div>
+                  ))
+                : <div className="empty-state">История пока пуста</div>
+              }
             </div>
           </>
         )}
 
+        {/* ── Inventory Screen ─────────────────────── */}
         {activeScreen === "inventory" && (
-          <div className="glass-card">
-            <h2 style={{ margin: '0 0 12px', fontSize: '18px' }}>Мои призы</h2>
-            {boot.prizes.length > 0 ? boot.prizes.map((item, i) => (
-              <div key={`${item.date}-${i}`} className="list-item">
-                <div className="list-content">
-                  <div className="list-title">{item.name}</div>
-                  <div className="list-subtitle">{formatDate(item.date)}</div>
-                </div>
-                <div className={classNames("list-value", `rarity-${item.rarity.toLowerCase()}`)} style={{ fontSize: '12px' }}>
-                  {item.rarity}
-                </div>
-              </div>
-            )) : <p style={{ textAlign: 'center', color: '#97a6b6' }}>У вас пока нет призов</p>}
+          <div className="card">
+            <div className="section-header">
+              <h2 className="section-title">Мои призы</h2>
+            </div>
+            {boot.prizes.length > 0
+              ? boot.prizes.map((item, i) => (
+                  <div key={`${item.date}-${i}`} className="list-item">
+                    <div className="list-content">
+                      <div className="list-title">{item.name}</div>
+                      <div className="list-subtitle">{formatDate(item.date)}</div>
+                    </div>
+                    <span className={`rarity-badge rarity-badge--${rarityClass(item.rarity)}`}>
+                      {item.rarity}
+                    </span>
+                  </div>
+                ))
+              : <div className="empty-state">У вас пока нет призов</div>
+            }
           </div>
         )}
 
+        {/* ── Leaderboard Screen ───────────────────── */}
         {activeScreen === "top" && (
-          <div className="glass-card">
-            <h2 style={{ margin: '0 0 12px', fontSize: '18px' }}>Рейтинг игроков</h2>
-            {boot.leaderboard.length > 0 ? boot.leaderboard.map((item, i) => (
-              <div key={`${item.user_id}-${i}`} className="list-item">
-                <div className="list-rank">{i + 1}</div>
-                <div className="list-content">
-                  <div className="list-title">{item.first_name || item.username || "Игрок"}</div>
-                  <div className="list-subtitle">{item.spins} спинов</div>
-                </div>
-                <div className="list-value">{item.wins} побед</div>
-              </div>
-            )) : <p style={{ textAlign: 'center', color: 'var(--hint)', fontSize: '14px' }}>Рейтинг пуст</p>}
+          <div className="card">
+            <div className="section-header">
+              <h2 className="section-title">Рейтинг игроков</h2>
+            </div>
+            {boot.leaderboard.length > 0
+              ? boot.leaderboard.map((item, i) => {
+                  const rankCls = i === 0 ? 'list-rank--gold' : i === 1 ? 'list-rank--silver' : i === 2 ? 'list-rank--bronze' : '';
+                  return (
+                    <div key={`${item.user_id}-${i}`} className="list-item">
+                      <div className={cn("list-rank", rankCls)}>{i + 1}</div>
+                      <div className="list-content">
+                        <div className="list-title">{item.first_name || item.username || "Игрок"}</div>
+                        <div className="list-subtitle">{item.spins} спинов</div>
+                      </div>
+                      <div className="list-value">{item.wins} побед</div>
+                    </div>
+                  );
+                })
+              : <div className="empty-state">Рейтинг пуст</div>
+            }
           </div>
         )}
       </div>
 
-      {/* Navigation Bar */}
+      {/* ── Navigation ─────────────────────────────── */}
       <div className="nav-bar">
-        <button className={classNames("nav-item", activeScreen === "spin" && "active")} onClick={() => setActiveScreen("spin")}>
+        <button className={cn("nav-item", activeScreen === "spin" && "active")} onClick={() => setActiveScreen("spin")}>
+          <IconDice />
           <span className="nav-label">Игра</span>
         </button>
-        <button className={classNames("nav-item", activeScreen === "inventory" && "active")} onClick={() => setActiveScreen("inventory")}>
+        <button className={cn("nav-item", activeScreen === "inventory" && "active")} onClick={() => setActiveScreen("inventory")}>
+          <IconGift />
           <span className="nav-label">Призы</span>
         </button>
-        <button className={classNames("nav-item", activeScreen === "top" && "active")} onClick={() => setActiveScreen("top")}>
+        <button className={cn("nav-item", activeScreen === "top" && "active")} onClick={() => setActiveScreen("top")}>
+          <IconTrophy />
           <span className="nav-label">Топ</span>
         </button>
       </div>
 
-      {/* Result Bottom Sheet */}
+      {/* ── Result Bottom Sheet ────────────────────── */}
       {showResult && winner && (
         <>
           <div className="sheet-backdrop" onClick={() => setShowResult(false)} />
           <div className="bottom-sheet">
             <div className="sheet-handle" />
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '64px', margin: '20px 0' }}>{winner.emoji}</div>
-              <h2 style={{ margin: '0 0 8px' }}>Вы выиграли: {winner.name}!</h2>
-              <p style={{ color: '#97a6b6', marginBottom: '20px' }}>{winner.rarity} предмет добавлен в ваш профиль.</p>
-              <button className="main-button" onClick={() => setShowResult(false)}>Отлично!</button>
+            <div className="result-content">
+              <div className="result-emoji">{winner.emoji}</div>
+              <h2 className="result-title">Вы выиграли: {winner.name}!</h2>
+              <p className="result-subtitle">{winner.rarity} предмет добавлен в ваш профиль.</p>
+              <button className="btn-spin" onClick={() => setShowResult(false)}>Отлично!</button>
             </div>
           </div>
         </>
       )}
 
-      {/* Admin Panel */}
+      {/* ── Admin Sheet ────────────────────────────── */}
       {showAdmin && (
-        <AdminSheet 
-          flags={boot.flags} 
-          onToggle={handleToggleFlag} 
-          onClose={() => setShowAdmin(false)} 
-          spinCost={boot.config.spin_cost} 
+        <AdminSheet
+          flags={boot.flags}
+          onToggle={handleToggleFlag}
+          onClose={() => setShowAdmin(false)}
+          spinCost={boot.config.spin_cost}
         />
       )}
 
-      {toast && <div className="toast" style={{ bottom: '80px' }}>{toast}</div>}
+      {/* ── Toast ──────────────────────────────────── */}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 };
