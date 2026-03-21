@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useEffectEvent, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 type ScreenKey = "spin" | "history" | "inventory" | "top";
@@ -82,11 +82,11 @@ const screens: Array<{ key: ScreenKey; label: string; icon: string }> = [
 ];
 
 const rarityTheme: Record<string, { glow: string; border: string }> = {
-  Обычный: { glow: "rgba(72, 196, 133, 0.22)", border: "#48c485" },
-  Редкий: { glow: "rgba(59, 141, 255, 0.24)", border: "#3b8dff" },
-  Эпический: { glow: "rgba(255, 164, 61, 0.26)", border: "#ffa43d" },
-  Легендарный: { glow: "rgba(247, 200, 87, 0.28)", border: "#f7c857" },
-  Промах: { glow: "rgba(126, 141, 160, 0.18)", border: "#7e8da0" },
+  "Обычный": { glow: "rgba(72, 196, 133, 0.22)", border: "#48c485" },
+  "Редкий": { glow: "rgba(59, 141, 255, 0.24)", border: "#3b8dff" },
+  "Эпический": { glow: "rgba(255, 164, 61, 0.26)", border: "#ffa43d" },
+  "Легендарный": { glow: "rgba(247, 200, 87, 0.28)", border: "#f7c857" },
+  "Промах": { glow: "rgba(126, 141, 160, 0.18)", border: "#7e8da0" },
 };
 
 function delay(ms: number) {
@@ -170,7 +170,7 @@ export function App() {
   const toastTimerRef = useRef<number | null>(null);
   const reelTrackRef = useRef<HTMLDivElement | null>(null);
 
-  const notify = useEffectEvent((message: string) => {
+  const notify = useCallback((message: string) => {
     setToast(message);
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
@@ -178,9 +178,9 @@ export function App() {
     toastTimerRef.current = window.setTimeout(() => {
       setToast("");
     }, 2600);
-  });
+  }, []);
 
-  const refreshUser = useEffectEvent(async () => {
+  const refreshUser = useCallback(async () => {
     const data = await api<Pick<BootstrapResponse, "user" | "prizes" | "free_used" | "is_owner">>("user");
     startTransition(() => {
       setBoot((current) =>
@@ -195,9 +195,9 @@ export function App() {
           : current
       );
     });
-  });
+  }, []);
 
-  const applyLiveSnapshot = useEffectEvent((payload: {
+  const applyLiveSnapshot = useCallback((payload: {
     history?: HistoryRow[];
     leaderboard?: LeaderboardRow[];
   }) => {
@@ -212,7 +212,123 @@ export function App() {
           : current
       );
     });
-  });
+  }, []);
+
+  const measureSpinOffset = useCallback((stopIndex: number) => {
+    const track = reelTrackRef.current;
+    if (!track) return 0;
+    const firstCard = track.querySelector<HTMLElement>("[data-roulette-card='true']");
+    const cardWidth = firstCard?.offsetWidth ?? 112;
+    const styles = window.getComputedStyle(track);
+    const gap = parseFloat(styles.columnGap || styles.gap || "12") || 12;
+    return -1 * stopIndex * (cardWidth + gap);
+  }, []);
+
+  const animateSpin = useCallback(async (winner: Prize, isDemo: boolean) => {
+    if (!boot) return;
+
+    setSpinning(true);
+    setResult(null);
+
+    const generated = makeReel(boot.prizes_catalog, winner);
+    setReelItems(generated.reel);
+    setReelDuration("0ms");
+    setReelOffset(0);
+
+    await delay(40);
+
+    const targetOffset = measureSpinOffset(generated.stopIndex);
+    setReelDuration("6200ms");
+    setReelOffset(targetOffset);
+
+    const hapticTimer = window.setInterval(() => tg?.HapticFeedback.impactOccurred("light"), 140);
+    await delay(6600);
+    window.clearInterval(hapticTimer);
+
+    await refreshUser();
+    setSpinning(false);
+
+    if (winner.type === "nothing") {
+      tg?.HapticFeedback.notificationOccurred("warning");
+      notify("В этот раз пусто. Попробуй ещё раз.");
+      return;
+    }
+
+    tg?.HapticFeedback.notificationOccurred("success");
+    setResult(winner);
+    setResultNote(
+      isDemo
+        ? "Сейчас включён тестовый режим. Предмет записан как тестовый выигрыш."
+        : "Предмет уже добавлен в профиль и появился в списке призов."
+    );
+    setActiveScreen("inventory");
+  }, [boot, measureSpinOffset, refreshUser, notify]);
+
+  const runPaidSpin = useCallback(async () => {
+    if (spinning) return;
+    try {
+      const invoice = await api<{ invoice_link: string }>("create_invoice", "POST");
+      tg?.openInvoice(invoice.invoice_link, (status) => {
+        if (status !== "paid") return;
+        tg?.MainButton.setText("Проверяем результат...").show();
+        if (pollingRef.current) window.clearInterval(pollingRef.current);
+        pollingRef.current = window.setInterval(async () => {
+          try {
+            const payload = await api<{ result: { winner: Prize; is_demo?: boolean } | null }>("spin_result");
+            if (!payload.result) return;
+            if (pollingRef.current) window.clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            tg?.MainButton.hide();
+            animateSpin(payload.result.winner, payload.result.is_demo ?? false);
+          } catch {
+            // polling continues
+          }
+        }, 1200);
+      });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось открыть оплату.");
+    }
+  }, [spinning, animateSpin, notify]);
+
+  const runFreeSpin = useCallback(async () => {
+    if (!boot || spinning || boot.free_used) return;
+    try {
+      const payload = await api<{ winner?: Prize; error?: string; channel_url?: string }>("free_spin", "POST");
+      if (payload.error === "already_used") {
+        notify("Бесплатный шанс уже использован.");
+        await refreshUser();
+        return;
+      }
+      if (payload.error === "not_subscribed") {
+        tg?.showConfirm("Для бесплатного шанса нужна подписка на канал. Открыть канал?", (ok) => {
+          if (ok) tg?.openLink(payload.channel_url || boot.config.channel_url);
+        });
+        return;
+      }
+      if (payload.winner) {
+        await animateSpin(payload.winner, boot.flags.demo);
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось запустить бесплатный шанс.");
+    }
+  }, [boot, spinning, animateSpin, refreshUser, notify]);
+
+  const toggleAdminFlag = useCallback(async (key: keyof RuntimeFlags) => {
+    try {
+      const response = await api<{ value: boolean }>("admin/toggle", "POST", { key });
+      setBoot((current) =>
+        current
+          ? {
+              ...current,
+              flags: { ...current.flags, [key]: response.value },
+            }
+          : current
+      );
+      notify("Настройка обновлена.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось обновить настройку.");
+    }
+  }, [notify]);
 
   useEffect(() => {
     tg?.ready();
@@ -268,7 +384,7 @@ export function App() {
           ]);
           applyLiveSnapshot({ history: history.history, leaderboard: leaderboard.rows });
         } catch {
-          //
+          // polling continues
         }
       }, 8000);
     };
@@ -287,128 +403,12 @@ export function App() {
     };
   }, []);
 
-  const measureSpinOffset = useEffectEvent((stopIndex: number) => {
-    const track = reelTrackRef.current;
-    if (!track) return 0;
-    const firstCard = track.querySelector<HTMLElement>("[data-roulette-card='true']");
-    const cardWidth = firstCard?.offsetWidth ?? 112;
-    const styles = window.getComputedStyle(track);
-    const gap = parseFloat(styles.columnGap || styles.gap || "12") || 12;
-    return -1 * stopIndex * (cardWidth + gap);
-  });
-
-  const animateSpin = useEffectEvent(async (winner: Prize, isDemo: boolean) => {
-    if (!boot) return;
-
-    setSpinning(true);
-    setResult(null);
-
-    const generated = makeReel(boot.prizes_catalog, winner);
-    setReelItems(generated.reel);
-    setReelDuration("0ms");
-    setReelOffset(0);
-
-    await delay(40);
-
-    const targetOffset = measureSpinOffset(generated.stopIndex);
-    setReelDuration("6200ms");
-    setReelOffset(targetOffset);
-
-    const hapticTimer = window.setInterval(() => tg?.HapticFeedback.impactOccurred("light"), 140);
-    await delay(6600);
-    window.clearInterval(hapticTimer);
-
-    await refreshUser();
-    setSpinning(false);
-
-    if (winner.type === "nothing") {
-      tg?.HapticFeedback.notificationOccurred("warning");
-      notify("В этот раз пусто. Попробуй ещё раз.");
-      return;
-    }
-
-    tg?.HapticFeedback.notificationOccurred("success");
-    setResult(winner);
-    setResultNote(
-      isDemo
-        ? "Сейчас включён тестовый режим. Предмет записан как тестовый выигрыш."
-        : "Предмет уже добавлен в профиль и появился в списке призов."
-    );
-    setActiveScreen("inventory");
-  });
-
-  const runPaidSpin = useEffectEvent(async () => {
-    if (spinning) return;
-    try {
-      const invoice = await api<{ invoice_link: string }>("create_invoice", "POST");
-      tg?.openInvoice(invoice.invoice_link, (status) => {
-        if (status !== "paid") return;
-        tg?.MainButton.setText("Проверяем результат...").show();
-        if (pollingRef.current) window.clearInterval(pollingRef.current);
-        pollingRef.current = window.setInterval(async () => {
-          try {
-            const payload = await api<{ result: { winner: Prize; is_demo?: boolean } | null }>("spin_result");
-            if (!payload.result) return;
-            if (pollingRef.current) window.clearInterval(pollingRef.current);
-            pollingRef.current = null;
-            tg?.MainButton.hide();
-            await animateSpin(payload.result.winner, payload.result.is_demo ?? false);
-          } catch {
-            //
-          }
-        }, 1200);
-      });
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Не удалось открыть оплату.");
-    }
-  });
-
-  const runFreeSpin = useEffectEvent(async () => {
-    if (!boot || spinning || boot.free_used) return;
-    try {
-      const payload = await api<{ winner?: Prize; error?: string; channel_url?: string }>("free_spin", "POST");
-      if (payload.error === "already_used") {
-        notify("Бесплатный шанс уже использован.");
-        await refreshUser();
-        return;
-      }
-      if (payload.error === "not_subscribed") {
-        tg?.showConfirm("Для бесплатного шанса нужна подписка на канал. Открыть канал?", (ok) => {
-          if (ok) tg?.openLink(payload.channel_url || boot.config.channel_url);
-        });
-        return;
-      }
-      if (payload.winner) {
-        await animateSpin(payload.winner, boot.flags.demo);
-      }
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Не удалось запустить бесплатный шанс.");
-    }
-  });
-
-  const toggleAdminFlag = useEffectEvent(async (key: keyof RuntimeFlags) => {
-    try {
-      const response = await api<{ value: boolean }>("admin/toggle", "POST", { key });
-      setBoot((current) =>
-        current
-          ? {
-              ...current,
-              flags: { ...current.flags, [key]: response.value },
-            }
-          : current
-      );
-      notify("Настройка обновлена.");
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Не удалось обновить настройку.");
-    }
-  });
-
   if (!boot) {
     return <LoadingState />;
   }
 
   const screenIndex = screens.findIndex((screen) => screen.key === activeScreen);
-  const currentResultTheme = result ? rarityTheme[result.rarity] ?? rarityTheme.Промах : rarityTheme.Промах;
+  const currentResultTheme = result ? rarityTheme[result.rarity] ?? rarityTheme["Промах"] : rarityTheme["Промах"];
 
   return (
     <div className="miniapp-shell">
@@ -574,7 +574,7 @@ function SpinScreen({
             style={{ transform: `translateX(${reelOffset}px)`, transitionDuration: reelDuration }}
           >
             {reelItems.map((prize, index) => {
-              const theme = rarityTheme[prize.rarity] ?? rarityTheme.Промах;
+              const theme = rarityTheme[prize.rarity] ?? rarityTheme["Промах"];
               return (
                 <article
                   key={`${prize.key}-${index}`}
@@ -653,7 +653,7 @@ function HistoryScreen({ history, catalog }: { history: HistoryRow[]; catalog: P
         {history.length ? (
           history.map((item, index) => {
             const found = catalog.find((prize) => prize.key === item.prize_key || prize.name === item.prize_name);
-            const theme = rarityTheme[item.rarity] ?? rarityTheme.Промах;
+            const theme = rarityTheme[item.rarity] ?? rarityTheme["Промах"];
             return (
               <ListCard
                 key={`${item.prize_key}-${item.won_at}-${index}`}
@@ -703,7 +703,7 @@ function InventoryScreen({
         {prizes.length ? (
           prizes.map((item) => {
             const found = catalog.find((prize) => prize.key === item.key || prize.name === item.name);
-            const theme = rarityTheme[item.rarity] ?? rarityTheme.Промах;
+            const theme = rarityTheme[item.rarity] ?? rarityTheme["Промах"];
             const badges = [
               item.free ? "БЕСПЛАТНО" : "",
               item.demo ? "ТЕСТ" : "",
