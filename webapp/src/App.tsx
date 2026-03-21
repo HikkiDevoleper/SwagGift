@@ -373,7 +373,9 @@ export const App: React.FC = () => {
           <div className="bottom-sheet">
             <div className="sheet-handle" />
             <div className="result-content">
-              <div className="result-emoji">{winner.emoji}</div>
+              <div className="result-sparkles">
+                <div className="result-emoji">{winner.emoji}</div>
+              </div>
               <h2 className="result-title">Вы выиграли: {winner.name}!</h2>
               <p className="result-subtitle">{winner.rarity} предмет добавлен в ваш профиль.</p>
               <button className="btn-spin" onClick={() => setShowResult(false)}>Отлично!</button>
