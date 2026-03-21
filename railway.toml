@@ -3,5 +3,5 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "python run.py"
-healthcheckPath = "/api/prizes_list"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 100

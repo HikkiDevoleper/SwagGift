@@ -1,247 +1,370 @@
-import aiosqlite
 import json
 import logging
-from datetime import datetime
-from typing import List, Dict, Optional, Any
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import aiosqlite
 
 log = logging.getLogger("swagging_gift.db")
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
 
 class Database:
     def __init__(self, path: Path):
         self.path = str(path)
 
+    async def _connect(self) -> aiosqlite.Connection:
+        db = await aiosqlite.connect(self.path)
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys = ON")
+        await db.execute("PRAGMA journal_mode = WAL")
+        await db.execute("PRAGMA synchronous = NORMAL")
+        await db.execute("PRAGMA busy_timeout = 5000")
+        return db
+
     async def setup(self) -> None:
-        async with aiosqlite.connect(self.path) as db:
-            await db.executescript("""
+        async with await self._connect() as db:
+            await db.executescript(
+                """
                 CREATE TABLE IF NOT EXISTS users (
-                    user_id     INTEGER PRIMARY KEY,
-                    username    TEXT    DEFAULT '',
-                    first_name  TEXT    DEFAULT '',
-                    spins       INTEGER DEFAULT 0,
-                    wins        INTEGER DEFAULT 0,
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT DEFAULT '',
+                    first_name TEXT DEFAULT '',
+                    spins INTEGER DEFAULT 0,
+                    wins INTEGER DEFAULT 0,
                     stars_spent INTEGER DEFAULT 0,
-                    is_banned   INTEGER DEFAULT 0,
-                    free_used   INTEGER DEFAULT 0,
-                    joined_at   TEXT    NOT NULL
+                    is_banned INTEGER DEFAULT 0,
+                    free_used INTEGER DEFAULT 0,
+                    joined_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 );
+
                 CREATE TABLE IF NOT EXISTS prizes (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id    INTEGER NOT NULL,
-                    prize_key  TEXT    NOT NULL,
-                    prize_name TEXT    NOT NULL,
-                    rarity     TEXT    NOT NULL,
-                    is_demo    INTEGER DEFAULT 0,
-                    is_free    INTEGER DEFAULT 0,
-                    won_at     TEXT    NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    prize_key TEXT NOT NULL,
+                    prize_name TEXT NOT NULL,
+                    rarity TEXT NOT NULL,
+                    is_demo INTEGER DEFAULT 0,
+                    is_free INTEGER DEFAULT 0,
+                    won_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 );
+
                 CREATE TABLE IF NOT EXISTS payments (
-                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id   INTEGER NOT NULL,
-                    charge_id TEXT    NOT NULL UNIQUE,
-                    amount    INTEGER NOT NULL,
-                    refunded  INTEGER DEFAULT 0,
-                    paid_at   TEXT    NOT NULL
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    charge_id TEXT NOT NULL UNIQUE,
+                    amount INTEGER NOT NULL,
+                    refunded INTEGER DEFAULT 0,
+                    paid_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 );
+
                 CREATE TABLE IF NOT EXISTS pending_spins (
-                    uid INTEGER, 
-                    charge_id TEXT UNIQUE, 
-                    result TEXT, 
-                    created_at TEXT
+                    uid INTEGER PRIMARY KEY,
+                    result TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (uid) REFERENCES users(user_id) ON DELETE CASCADE
                 );
-            """)
-            await db.commit()
-            
-            # Migrations
+
+                CREATE INDEX IF NOT EXISTS idx_prizes_user_won_at ON prizes(user_id, won_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_prizes_won_at ON prizes(won_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_users_joined_at ON users(joined_at DESC);
+                """
+            )
+
             for table, col, dfn in [
                 ("users", "stars_spent", "INTEGER DEFAULT 0"),
-                ("users", "is_banned",   "INTEGER DEFAULT 0"),
-                ("users", "free_used",   "INTEGER DEFAULT 0"),
-                ("prizes", "is_free",    "INTEGER DEFAULT 0"),
+                ("users", "is_banned", "INTEGER DEFAULT 0"),
+                ("users", "free_used", "INTEGER DEFAULT 0"),
+                ("users", "updated_at", f"TEXT NOT NULL DEFAULT '{utc_now_iso()}'"),
+                ("prizes", "is_free", "INTEGER DEFAULT 0"),
             ]:
                 try:
                     await db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {dfn}")
-                    await db.commit()
                 except Exception:
                     pass
-        log.info(f"Database ready: {self.path}")
+
+            await db.commit()
+        log.info("Database ready: %s", self.path)
 
     async def ensure_user(self, uid: int, username: str, first_name: str) -> None:
-        async with aiosqlite.connect(self.path) as db:
+        async with await self._connect() as db:
+            now = utc_now_iso()
             await db.execute(
-                "INSERT OR IGNORE INTO users (user_id,username,first_name,joined_at) VALUES (?,?,?,?)",
-                (uid, username or "", first_name or "", datetime.now().isoformat()),
+                """
+                INSERT INTO users (user_id, username, first_name, joined_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    username = excluded.username,
+                    first_name = excluded.first_name,
+                    updated_at = excluded.updated_at
+                """,
+                (uid, username or "", first_name or "", now, now),
             )
             await db.commit()
 
     async def get_user(self, uid: int) -> Optional[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM users WHERE user_id=?", (uid,)) as cur:
+        async with await self._connect() as db:
+            async with db.execute("SELECT * FROM users WHERE user_id = ?", (uid,)) as cur:
                 row = await cur.fetchone()
                 return dict(row) if row else None
 
     async def is_banned(self, uid: int) -> bool:
         user = await self.get_user(uid)
-        return bool(user.get("is_banned", 0)) if user else False
+        return bool(user["is_banned"]) if user else False
 
     async def set_ban(self, uid: int, state: bool) -> None:
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("UPDATE users SET is_banned=? WHERE user_id=?", (int(state), uid))
+        async with await self._connect() as db:
+            await db.execute(
+                "UPDATE users SET is_banned = ?, updated_at = ? WHERE user_id = ?",
+                (int(state), utc_now_iso(), uid),
+            )
             await db.commit()
 
     async def has_used_free(self, uid: int) -> bool:
         user = await self.get_user(uid)
-        return bool(user.get("free_used", 0)) if user else False
+        return bool(user["free_used"]) if user else False
 
-    async def get_global_history(self, limit: int = 20) -> List[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT p.*, u.first_name, u.username FROM prizes p "
-                "JOIN users u ON p.user_id = u.user_id "
-                "WHERE p.is_demo = 0 ORDER BY p.won_at DESC LIMIT ?", (limit,)
-            ) as cur:
-                return [dict(r) for r in await cur.fetchall()]
-
-    # Existing methods follow...
-
-    async def record_spin(self, uid: int, prize: Dict[str, Any],
-                          is_demo: bool = False, is_free: bool = False,
-                          stars: int = 0, charge_id: str = "") -> None:
-        won = prize["type"] != "nothing"
-        async with aiosqlite.connect(self.path) as db:
+    async def mark_free_used(self, uid: int) -> None:
+        async with await self._connect() as db:
             await db.execute(
-                "UPDATE users SET spins=spins+1, stars_spent=stars_spent+? WHERE user_id=?",
-                (stars, uid),
+                "UPDATE users SET free_used = 1, updated_at = ? WHERE user_id = ?",
+                (utc_now_iso(), uid),
             )
+            await db.commit()
+
+    async def record_spin(
+        self,
+        uid: int,
+        prize: Dict[str, Any],
+        *,
+        is_demo: bool = False,
+        is_free: bool = False,
+        stars: int = 0,
+        charge_id: str = "",
+    ) -> None:
+        won = prize["type"] != "nothing"
+        async with await self._connect() as db:
+            await db.execute(
+                """
+                UPDATE users
+                SET spins = spins + 1,
+                    wins = wins + ?,
+                    stars_spent = stars_spent + ?,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (1 if won else 0, stars, utc_now_iso(), uid),
+            )
+
             if won:
-                await db.execute("UPDATE users SET wins=wins+1 WHERE user_id=?", (uid,))
                 await db.execute(
-                    "INSERT INTO prizes (user_id,prize_key,prize_name,rarity,is_demo,is_free,won_at) "
-                    "VALUES (?,?,?,?,?,?,?)",
-                    (uid, prize["key"], prize["name"], prize["rarity"],
-                     int(is_demo), int(is_free), datetime.now().isoformat()),
+                    """
+                    INSERT INTO prizes (user_id, prize_key, prize_name, rarity, is_demo, is_free, won_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        uid,
+                        prize["key"],
+                        prize["name"],
+                        prize["rarity"],
+                        int(is_demo),
+                        int(is_free),
+                        utc_now_iso(),
+                    ),
                 )
+
             if charge_id:
                 await db.execute(
-                    "INSERT OR IGNORE INTO payments (user_id,charge_id,amount,paid_at) VALUES (?,?,?,?)",
-                    (uid, charge_id, stars, datetime.now().isoformat()),
+                    """
+                    INSERT INTO payments (user_id, charge_id, amount, paid_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(charge_id) DO NOTHING
+                    """,
+                    (uid, charge_id, stars, utc_now_iso()),
                 )
+
             await db.commit()
 
     async def get_prizes(self, uid: int, limit: int = 20) -> List[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT prize_name,rarity,is_demo,is_free,won_at FROM prizes "
-                "WHERE user_id=? ORDER BY won_at DESC LIMIT ?", (uid, limit)
+                """
+                SELECT prize_key, prize_name, rarity, is_demo, is_free, won_at
+                FROM prizes
+                WHERE user_id = ?
+                ORDER BY won_at DESC
+                LIMIT ?
+                """,
+                (uid, limit),
             ) as cur:
+                rows = await cur.fetchall()
                 return [
-                    {"name": r[0], "rarity": r[1],
-                     "demo": bool(r[2]), "free": bool(r[3]),
-                     "date": r[4][5:16].replace("T", " ")}
-                    for r in await cur.fetchall()
+                    {
+                        "key": row["prize_key"],
+                        "name": row["prize_name"],
+                        "rarity": row["rarity"],
+                        "demo": bool(row["is_demo"]),
+                        "free": bool(row["is_free"]),
+                        "date": row["won_at"],
+                    }
+                    for row in rows
                 ]
 
+    async def get_global_history(self, limit: int = 20) -> List[Dict[str, Any]]:
+        async with await self._connect() as db:
+            async with db.execute(
+                """
+                SELECT p.*, u.first_name, u.username
+                FROM prizes p
+                JOIN users u ON u.user_id = p.user_id
+                WHERE p.is_demo = 0
+                ORDER BY p.won_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ) as cur:
+                return [dict(row) for row in await cur.fetchall()]
+
     async def get_payment(self, charge_id: str) -> Optional[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM payments WHERE charge_id=?", (charge_id,)) as cur:
+        async with await self._connect() as db:
+            async with db.execute(
+                "SELECT * FROM payments WHERE charge_id = ?",
+                (charge_id,),
+            ) as cur:
                 row = await cur.fetchone()
                 return dict(row) if row else None
 
     async def mark_refunded(self, charge_id: str) -> bool:
-        async with aiosqlite.connect(self.path) as db:
+        async with await self._connect() as db:
             cur = await db.execute(
-                "UPDATE payments SET refunded=1 WHERE charge_id=? AND refunded=0", (charge_id,)
+                "UPDATE payments SET refunded = 1 WHERE charge_id = ? AND refunded = 0",
+                (charge_id,),
             )
             await db.commit()
             return cur.rowcount > 0
 
     async def total_stars(self) -> int:
-        async with aiosqlite.connect(self.path) as db:
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT COALESCE(SUM(amount),0) FROM payments WHERE refunded=0"
+                "SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE refunded = 0"
             ) as cur:
                 row = await cur.fetchone()
-                return int(row[0]) if row else 0
+                return int(row["total"]) if row else 0
 
     async def total_users(self) -> int:
-        async with aiosqlite.connect(self.path) as db:
-            async with db.execute("SELECT COUNT(*) FROM users") as cur:
+        async with await self._connect() as db:
+            async with db.execute("SELECT COUNT(*) AS total FROM users") as cur:
                 row = await cur.fetchone()
-                return int(row[0]) if row else 0
+                return int(row["total"]) if row else 0
 
     async def total_spins(self) -> int:
-        async with aiosqlite.connect(self.path) as db:
-            async with db.execute("SELECT COALESCE(SUM(spins),0) FROM users") as cur:
+        async with await self._connect() as db:
+            async with db.execute("SELECT COALESCE(SUM(spins), 0) AS total FROM users") as cur:
                 row = await cur.fetchone()
-                return int(row[0]) if row else 0
+                return int(row["total"]) if row else 0
 
     async def wins_today(self) -> int:
-        today = datetime.now().strftime("%Y-%m-%d")
-        async with aiosqlite.connect(self.path) as db:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT COUNT(*) FROM prizes WHERE won_at LIKE ? AND is_demo=0", (f"{today}%",)
+                """
+                SELECT COUNT(*) AS total
+                FROM prizes
+                WHERE won_at LIKE ? AND is_demo = 0
+                """,
+                (f"{today}%",),
             ) as cur:
                 row = await cur.fetchone()
-                return int(row[0]) if row else 0
+                return int(row["total"]) if row else 0
 
     async def leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT * FROM users WHERE is_banned=0 ORDER BY wins DESC LIMIT ?", (limit,)
+                """
+                SELECT user_id, username, first_name, spins, wins, stars_spent
+                FROM users
+                WHERE is_banned = 0
+                ORDER BY wins DESC, spins DESC, updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
             ) as cur:
-                return [dict(r) for r in await cur.fetchall()]
+                return [dict(row) for row in await cur.fetchall()]
 
     async def get_users_list(self, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT user_id,username,first_name,spins,wins,stars_spent,is_banned "
-                "FROM users ORDER BY joined_at DESC LIMIT ? OFFSET ?", (limit, offset)
+                """
+                SELECT user_id, username, first_name, spins, wins, stars_spent, is_banned
+                FROM users
+                ORDER BY joined_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
             ) as cur:
-                return [dict(r) for r in await cur.fetchall()]
+                return [dict(row) for row in await cur.fetchall()]
 
     async def recent_payments(self, limit: int = 8) -> List[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
-            db.row_factory = aiosqlite.Row
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT p.*, u.first_name, u.username FROM payments p "
-                "LEFT JOIN users u ON p.user_id=u.user_id "
-                "ORDER BY p.paid_at DESC LIMIT ?", (limit,)
+                """
+                SELECT p.*, u.first_name, u.username
+                FROM payments p
+                LEFT JOIN users u ON u.user_id = p.user_id
+                ORDER BY p.paid_at DESC
+                LIMIT ?
+                """,
+                (limit,),
             ) as cur:
-                return [dict(r) for r in await cur.fetchall()]
+                return [dict(row) for row in await cur.fetchall()]
 
     async def all_user_ids(self) -> List[int]:
-        async with aiosqlite.connect(self.path) as db:
-            async with db.execute("SELECT user_id FROM users WHERE is_banned=0") as cur:
-                return [r[0] for r in await cur.fetchall()]
+        async with await self._connect() as db:
+            async with db.execute("SELECT user_id FROM users WHERE is_banned = 0") as cur:
+                rows = await cur.fetchall()
+                return [int(row["user_id"]) for row in rows]
 
-    # Pending Spins logic
     async def set_spin_result_by_uid(self, uid: int, result: Dict[str, Any]) -> None:
-        async with aiosqlite.connect(self.path) as db:
-            # We insert a new pending result for the user
+        async with await self._connect() as db:
             await db.execute(
-                "INSERT INTO pending_spins (uid, result, created_at) VALUES (?,?,?)",
-                (uid, json.dumps(result, ensure_ascii=False), datetime.now().isoformat())
+                """
+                INSERT INTO pending_spins (uid, result, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(uid) DO UPDATE SET
+                    result = excluded.result,
+                    created_at = excluded.created_at
+                """,
+                (uid, json.dumps(result, ensure_ascii=False), utc_now_iso()),
             )
             await db.commit()
 
     async def get_spin_result(self, uid: int) -> Optional[Dict[str, Any]]:
-        async with aiosqlite.connect(self.path) as db:
+        async with await self._connect() as db:
             async with db.execute(
-                "SELECT result, created_at FROM pending_spins WHERE uid=? AND result IS NOT NULL "
-                "ORDER BY created_at DESC LIMIT 1", (uid,)
+                "SELECT result FROM pending_spins WHERE uid = ?",
+                (uid,),
             ) as cur:
                 row = await cur.fetchone()
-                if row and row[0]:
-                    # Delete the one we just retrieved to avoid double-processing
-                    await db.execute(
-                        "DELETE FROM pending_spins WHERE uid=?", (uid,)
-                    )
-                    await db.commit()
-                    return json.loads(row[0])
-        return None
+                if not row:
+                    return None
+
+            await db.execute("DELETE FROM pending_spins WHERE uid = ?", (uid,))
+            await db.commit()
+            return json.loads(row["result"])
+
+    async def get_dashboard_stats(self) -> Dict[str, int]:
+        total_users, total_spins, total_stars, wins_today = await self.total_users(), await self.total_spins(), await self.total_stars(), await self.wins_today()
+        return {
+            "users": total_users,
+            "spins": total_spins,
+            "stars": total_stars,
+            "wins_today": wins_today,
+        }
