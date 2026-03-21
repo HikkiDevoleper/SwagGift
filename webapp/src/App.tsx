@@ -1,13 +1,7 @@
-import {
-  startTransition,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { startTransition, useEffect, useEffectEvent, useRef, useState } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 
-type TabKey = "play" | "inventory" | "live" | "top" | "admin";
+type ScreenKey = "spin" | "history" | "inventory" | "top";
 
 type Prize = {
   key: string;
@@ -80,24 +74,36 @@ type BootstrapResponse = {
 
 const tg = window.Telegram?.WebApp;
 
-const rarityTheme: Record<string, { glow: string; border: string }> = {
-  "Обычный": { glow: "rgba(104, 211, 145, 0.45)", border: "#68d391" },
-  "Редкий": { glow: "rgba(96, 165, 250, 0.45)", border: "#60a5fa" },
-  "Эпический": { glow: "rgba(251, 146, 60, 0.45)", border: "#fb923c" },
-  "Легендарный": { glow: "rgba(250, 204, 21, 0.45)", border: "#facc15" },
-  "Промах": { glow: "rgba(148, 163, 184, 0.28)", border: "#94a3b8" },
-};
-
-const tabs: Array<{ key: TabKey; label: string }> = [
-  { key: "play", label: "Play" },
-  { key: "inventory", label: "Drops" },
-  { key: "live", label: "Live" },
-  { key: "top", label: "Top" },
-  { key: "admin", label: "Control" },
+const screens: Array<{ key: ScreenKey; label: string; icon: string }> = [
+  { key: "spin", label: "Игра", icon: "◈" },
+  { key: "history", label: "Лента", icon: "●" },
+  { key: "inventory", label: "Профиль", icon: "◆" },
+  { key: "top", label: "Топ", icon: "▲" },
 ];
+
+const rarityTheme: Record<string, { glow: string; border: string }> = {
+  Обычный: { glow: "rgba(72, 196, 133, 0.22)", border: "#48c485" },
+  Редкий: { glow: "rgba(59, 141, 255, 0.24)", border: "#3b8dff" },
+  Эпический: { glow: "rgba(255, 164, 61, 0.26)", border: "#ffa43d" },
+  Легендарный: { glow: "rgba(247, 200, 87, 0.28)", border: "#f7c857" },
+  Промах: { glow: "rgba(126, 141, 160, 0.18)", border: "#7e8da0" },
+};
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function initialsOf(user?: User | null) {
+  const raw = user?.first_name || user?.username || "SG";
+  return raw.slice(0, 2).toUpperCase();
+}
+
+function rankTitle(wins: number) {
+  if (wins >= 50) return "Легенда";
+  if (wins >= 20) return "Коллекционер";
+  if (wins >= 10) return "Везунчик";
+  if (wins >= 3) return "Игрок";
+  return "Новичок";
 }
 
 function formatDate(value: string) {
@@ -111,19 +117,6 @@ function formatDate(value: string) {
   } catch {
     return value;
   }
-}
-
-function rankTitle(wins: number) {
-  if (wins >= 50) return "Crystal Whale";
-  if (wins >= 20) return "Cube Master";
-  if (wins >= 10) return "Night Spinner";
-  if (wins >= 3) return "Rising Collector";
-  return "Fresh Arrival";
-}
-
-function initialsOf(user?: User | null) {
-  const raw = user?.first_name || user?.username || "SG";
-  return raw.slice(0, 2).toUpperCase();
 }
 
 function classNames(...values: Array<string | false | null | undefined>) {
@@ -150,8 +143,8 @@ async function api<T>(endpoint: string, method = "GET", body?: unknown): Promise
 
 function makeReel(prizes: Prize[], winner?: Prize) {
   const reel: Prize[] = [];
-  const stopIndex = 46;
-  for (let index = 0; index < 64; index += 1) {
+  const stopIndex = 44;
+  for (let index = 0; index < 60; index += 1) {
     const prize =
       winner && index === stopIndex
         ? winner
@@ -163,7 +156,7 @@ function makeReel(prizes: Prize[], winner?: Prize) {
 
 export function App() {
   const [boot, setBoot] = useState<BootstrapResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>("play");
+  const [activeScreen, setActiveScreen] = useState<ScreenKey>("spin");
   const [liveConnected, setLiveConnected] = useState(false);
   const [toast, setToast] = useState("");
   const [spinning, setSpinning] = useState(false);
@@ -172,9 +165,10 @@ export function App() {
   const [reelDuration, setReelDuration] = useState("0ms");
   const [result, setResult] = useState<Prize | null>(null);
   const [resultNote, setResultNote] = useState("");
-  const [refreshTick, setRefreshTick] = useState(0);
+  const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
   const pollingRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const reelTrackRef = useRef<HTMLDivElement | null>(null);
 
   const notify = useEffectEvent((message: string) => {
     setToast(message);
@@ -183,7 +177,7 @@ export function App() {
     }
     toastTimerRef.current = window.setTimeout(() => {
       setToast("");
-    }, 2800);
+    }, 2600);
   });
 
   const refreshUser = useEffectEvent(async () => {
@@ -200,7 +194,6 @@ export function App() {
             }
           : current
       );
-      setRefreshTick((value) => value + 1);
     });
   });
 
@@ -238,7 +231,7 @@ export function App() {
         setBoot(data);
         setReelItems(initial.reel);
       } catch (error) {
-        notify(error instanceof Error ? error.message : "Не удалось загрузить приложение.");
+        notify(error instanceof Error ? error.message : "Не удалось открыть мини-приложение.");
       }
     };
 
@@ -294,8 +287,19 @@ export function App() {
     };
   }, []);
 
+  const measureSpinOffset = useEffectEvent((stopIndex: number) => {
+    const track = reelTrackRef.current;
+    if (!track) return 0;
+    const firstCard = track.querySelector<HTMLElement>("[data-roulette-card='true']");
+    const cardWidth = firstCard?.offsetWidth ?? 112;
+    const styles = window.getComputedStyle(track);
+    const gap = parseFloat(styles.columnGap || styles.gap || "12") || 12;
+    return -1 * stopIndex * (cardWidth + gap);
+  });
+
   const animateSpin = useEffectEvent(async (winner: Prize, isDemo: boolean) => {
     if (!boot) return;
+
     setSpinning(true);
     setResult(null);
 
@@ -304,14 +308,13 @@ export function App() {
     setReelDuration("0ms");
     setReelOffset(0);
 
-    await delay(30);
+    await delay(40);
 
-    const cardWidth = 148;
-    const targetOffset = -1 * (generated.stopIndex * cardWidth - 180);
+    const targetOffset = measureSpinOffset(generated.stopIndex);
     setReelDuration("6200ms");
     setReelOffset(targetOffset);
 
-    const hapticTimer = window.setInterval(() => tg?.HapticFeedback.impactOccurred("light"), 150);
+    const hapticTimer = window.setInterval(() => tg?.HapticFeedback.impactOccurred("light"), 140);
     await delay(6600);
     window.clearInterval(hapticTimer);
 
@@ -320,7 +323,7 @@ export function App() {
 
     if (winner.type === "nothing") {
       tg?.HapticFeedback.notificationOccurred("warning");
-      notify("В этот раз пусто. Но следующий дроп может быть легендарным.");
+      notify("В этот раз пусто. Попробуй ещё раз.");
       return;
     }
 
@@ -328,10 +331,10 @@ export function App() {
     setResult(winner);
     setResultNote(
       isDemo
-        ? "Сейчас активен demo mode, поэтому предмет записан как тестовый выигрыш."
-        : "Подарок уже добавлен в профиль и отображается в разделе Drops."
+        ? "Сейчас включён тестовый режим. Предмет записан как тестовый выигрыш."
+        : "Предмет уже добавлен в профиль и появился в списке призов."
     );
-    setActiveTab("inventory");
+    setActiveScreen("inventory");
   });
 
   const runPaidSpin = useEffectEvent(async () => {
@@ -339,22 +342,21 @@ export function App() {
     try {
       const invoice = await api<{ invoice_link: string }>("create_invoice", "POST");
       tg?.openInvoice(invoice.invoice_link, (status) => {
-        if (status === "paid") {
-          tg?.MainButton.setText("Получаем дроп...").show();
-          if (pollingRef.current) window.clearInterval(pollingRef.current);
-          pollingRef.current = window.setInterval(async () => {
-            try {
-              const payload = await api<{ result: { winner: Prize; is_demo?: boolean } | null }>("spin_result");
-              if (!payload.result) return;
-              if (pollingRef.current) window.clearInterval(pollingRef.current);
-              pollingRef.current = null;
-              tg?.MainButton.hide();
-              await animateSpin(payload.result.winner, payload.result.is_demo ?? false);
-            } catch {
-              //
-            }
-          }, 1200);
-        }
+        if (status !== "paid") return;
+        tg?.MainButton.setText("Проверяем результат...").show();
+        if (pollingRef.current) window.clearInterval(pollingRef.current);
+        pollingRef.current = window.setInterval(async () => {
+          try {
+            const payload = await api<{ result: { winner: Prize; is_demo?: boolean } | null }>("spin_result");
+            if (!payload.result) return;
+            if (pollingRef.current) window.clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            tg?.MainButton.hide();
+            await animateSpin(payload.result.winner, payload.result.is_demo ?? false);
+          } catch {
+            //
+          }
+        }, 1200);
       });
     } catch (error) {
       notify(error instanceof Error ? error.message : "Не удалось открыть оплату.");
@@ -371,7 +373,7 @@ export function App() {
         return;
       }
       if (payload.error === "not_subscribed") {
-        tg?.showConfirm("Для бесплатного спина нужна подписка на канал. Открыть канал?", (ok) => {
+        tg?.showConfirm("Для бесплатного шанса нужна подписка на канал. Открыть канал?", (ok) => {
           if (ok) tg?.openLink(payload.channel_url || boot.config.channel_url);
         });
         return;
@@ -380,7 +382,7 @@ export function App() {
         await animateSpin(payload.winner, boot.flags.demo);
       }
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Бесплатный спин не запустился.");
+      notify(error instanceof Error ? error.message : "Не удалось запустить бесплатный шанс.");
     }
   });
 
@@ -388,333 +390,371 @@ export function App() {
     try {
       const response = await api<{ value: boolean }>("admin/toggle", "POST", { key });
       setBoot((current) =>
-        current ? { ...current, flags: { ...current.flags, [key]: response.value } } : current
+        current
+          ? {
+              ...current,
+              flags: { ...current.flags, [key]: response.value },
+            }
+          : current
       );
-      notify(`Флаг ${key} обновлён.`);
+      notify("Настройка обновлена.");
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Не удалось переключить флаг.");
+      notify(error instanceof Error ? error.message : "Не удалось обновить настройку.");
     }
   });
 
   if (!boot) {
-    return (
-      <div className="shell loading-shell">
-        <div className="loading-grid" />
-        <div className="loader-cube">
-          <span />
-          <span />
-          <span />
-        </div>
-        <p className="loading-title">Launching cube engine</p>
-        <p className="loading-copy">Поднимаем Telegram glass-интерфейс и синхронизируем ленту.</p>
-      </div>
-    );
+    return <LoadingState />;
   }
 
-  const { user, prizes, leaderboard, history, flags } = boot;
-  const visibleTabs = tabs.filter((tab) => boot.is_owner || tab.key !== "admin");
-  const currentResultTheme = result ? rarityTheme[result.rarity] ?? rarityTheme["Промах"] : rarityTheme["Промах"];
+  const screenIndex = screens.findIndex((screen) => screen.key === activeScreen);
+  const currentResultTheme = result ? rarityTheme[result.rarity] ?? rarityTheme.Промах : rarityTheme.Промах;
 
   return (
-    <div className="shell">
-      <div className="backdrop-orb orb-one" />
-      <div className="backdrop-orb orb-two" />
-      <div className="grain" />
+    <div className="miniapp-shell">
+      <div className="miniapp-backdrop" />
 
-      <header className="hero glass">
-        <div className="hero-copy">
-          <div className="eyebrow-row">
-            <span className="eyebrow-pill">Telegram Mini App</span>
-            <span className={classNames("live-pill", liveConnected && "connected")}>
-              {liveConnected ? "LIVE FEED" : "RECONNECTING"}
-            </span>
-          </div>
+      <div className="miniapp">
+        <HeaderSheet
+          user={boot.user}
+          freeUsed={boot.free_used}
+          liveConnected={liveConnected}
+          isOwner={boot.is_owner}
+          onOwnerOpen={() => setOwnerSheetOpen(true)}
+        />
 
-          <div className="identity-row">
-            <div className="avatar-chip">{initialsOf(user)}</div>
-            <div>
-              <h1>{user.first_name || user.username || "Swag Player"}</h1>
-              <p className="identity-rank">{rankTitle(user.wins)}</p>
-            </div>
-          </div>
-
-          <div className="hero-stats">
-            <Metric label="Wins" value={String(user.wins)} />
-            <Metric label="Spins" value={String(user.spins)} />
-            <Metric label="Spent" value={`${user.stars_spent}⭐`} />
-          </div>
-
-          <div className="hero-note glass-soft">
-            <div>
-              <p className="note-title">Cube + Dark + Glass</p>
-              <p className="note-copy">
-                Живая рулетка, стеклянные панели и Telegram-first поведение без старого статического фронта.
-              </p>
-            </div>
-            <button className="ghost-button" type="button" onClick={() => refreshUser()}>
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <CubeWidget wins={user.wins} refreshTick={refreshTick} />
-      </header>
-
-      <nav className="tabbar glass">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={classNames("tabbar-button", activeTab === tab.key && "active")}
-            onClick={() => setActiveTab(tab.key)}
+        <div className="screens-shell">
+          <div
+            className="screens-track"
+            style={{ transform: `translateX(calc(-${screenIndex} * 100%))` }}
           >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+            <section className="screen">
+              <SpinScreen
+                boot={boot}
+                spinning={spinning}
+                reelItems={reelItems}
+                reelOffset={reelOffset}
+                reelDuration={reelDuration}
+                reelTrackRef={reelTrackRef}
+                onPaidSpin={() => runPaidSpin()}
+                onFreeSpin={() => runFreeSpin()}
+              />
+            </section>
 
-      <main className="layout-grid">
-        <section className="play-column glass">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow-pill subtle">Night Spin Chamber</p>
-              <h2>Crystal cube roulette</h2>
-            </div>
-            <div className="price-badge">{boot.config.spin_cost}⭐ / spin</div>
-          </div>
+            <section className="screen">
+              <HistoryScreen history={boot.history} catalog={boot.prizes_catalog} />
+            </section>
 
-          <div className="reel-stage">
-            <div className="reel-marker" />
-            <div
-              className="reel-track"
-              style={{ transform: `translateX(${reelOffset}px)`, transitionDuration: reelDuration }}
-            >
-              {reelItems.map((prize, index) => {
-                const theme = rarityTheme[prize.rarity] ?? rarityTheme["Промах"];
-                return (
-                  <article
-                    key={`${prize.key}-${index}`}
-                    className="reel-card"
-                    style={
-                      {
-                        "--card-glow": theme.glow,
-                        "--card-border": theme.border,
-                      } as CSSProperties
-                    }
-                  >
-                    <span className="reel-emoji">{prize.emoji}</span>
-                    <strong>{prize.name}</strong>
-                    <span>{prize.rarity}</span>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
+            <section className="screen">
+              <InventoryScreen user={boot.user} prizes={boot.prizes} catalog={boot.prizes_catalog} />
+            </section>
 
-          <div className="action-row">
-            <button type="button" className="primary-button" disabled={spinning} onClick={() => runPaidSpin()}>
-              <span>Запустить премиум-спин</span>
-              <small>Telegram Stars, плавная анимация, live результат</small>
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={spinning || boot.free_used}
-              onClick={() => runFreeSpin()}
-            >
-              <span>{boot.free_used ? "Free spin уже взят" : "Взять free spin"}</span>
-              <small>{boot.free_used ? "Остаётся платный спин" : "Нужна подписка на канал"}</small>
-            </button>
-          </div>
-
-          <div className="quick-strip">
-            {boot.prizes_catalog.slice(0, 6).map((prize) => (
-              <div key={prize.key} className="quick-card glass-soft">
-                <span>{prize.emoji}</span>
-                <small>{prize.name}</small>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="content-column">
-          {activeTab === "play" && (
-            <Panel title="Tonight's board" subtitle="Собрали всё важное в одном стеклянном блоке.">
-              <div className="board-grid">
-                <InfoTile title="Free status" value={boot.free_used ? "USED" : "READY"} />
-                <InfoTile title="Channel" value={boot.config.channel_id.replace("@", "")} />
-                <InfoTile title="Demo" value={flags.demo ? "ON" : "OFF"} />
-                <InfoTile title="Realtime" value={liveConnected ? "SYNCED" : "RETRY"} />
-              </div>
-            </Panel>
-          )}
-
-          {activeTab === "inventory" && (
-            <Panel title="Your drops" subtitle="Твой личный dark inventory.">
-              <div className="stack-list">
-                {prizes.length ? (
-                  prizes.map((item) => {
-                    const theme = rarityTheme[item.rarity] ?? rarityTheme["Промах"];
-                    const found = boot.prizes_catalog.find((prize) => prize.key === item.key || prize.name === item.name);
-                    return (
-                      <div
-                        key={`${item.key}-${item.date}`}
-                        className="stack-card"
-                        style={{ borderColor: `${theme.border}55` }}
-                      >
-                        <div className="stack-icon">{found?.emoji ?? "🎁"}</div>
-                        <div className="stack-copy">
-                          <strong>{item.name}</strong>
-                          <span>{formatDate(item.date)}</span>
-                        </div>
-                        <div className="badge-group">
-                          {item.free && <span className="mini-badge accent">FREE</span>}
-                          {item.demo && <span className="mini-badge">DEMO</span>}
-                          <span className="mini-badge" style={{ color: theme.border }}>
-                            {item.rarity}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <EmptyState title="Ещё пусто" copy="Первый красивый дроп появится здесь после спина." />
-                )}
-              </div>
-            </Panel>
-          )}
-
-          {activeTab === "live" && (
-            <Panel title="Live tape" subtitle="Последние выигрыши всех игроков в реальном времени.">
-              <div className="stack-list">
-                {history.length ? (
-                  history.map((item, index) => {
-                    const theme = rarityTheme[item.rarity] ?? rarityTheme["Промах"];
-                    const found = boot.prizes_catalog.find(
-                      (prize) => prize.key === item.prize_key || prize.name === item.prize_name
-                    );
-                    return (
-                      <div
-                        key={`${item.prize_key}-${item.won_at}-${index}`}
-                        className="stack-card live-stack"
-                        style={{ borderColor: `${theme.border}55` }}
-                      >
-                        <div className="stack-icon">{found?.emoji ?? "🎁"}</div>
-                        <div className="stack-copy">
-                          <strong>{item.first_name || item.username || "Anonymous"}</strong>
-                          <span>
-                            {item.prize_name} • {formatDate(item.won_at)}
-                          </span>
-                        </div>
-                        <span className="mini-badge" style={{ color: theme.border }}>
-                          {item.rarity}
-                        </span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <EmptyState title="Лента прогревается" copy="Как только появятся победы, они начнут лететь сюда." />
-                )}
-              </div>
-            </Panel>
-          )}
-
-          {activeTab === "top" && (
-            <Panel title="Top collectors" subtitle="Лучшие игроки по победам и активности.">
-              <div className="stack-list">
-                {leaderboard.length ? (
-                  leaderboard.map((item, index) => (
-                    <div key={item.user_id} className="stack-card leaderboard-card">
-                      <div className="leader-rank">{index + 1}</div>
-                      <div className="stack-copy">
-                        <strong>{item.first_name || item.username || "Player"}</strong>
-                        <span>
-                          {item.spins} spins • {item.stars_spent}⭐ spent
-                        </span>
-                      </div>
-                      <div className="leader-wins">{item.wins} wins</div>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState title="Топ ещё пустой" copy="Нужна хотя бы пара игроков и несколько спинов." />
-                )}
-              </div>
-            </Panel>
-          )}
-
-          {activeTab === "admin" && boot.is_owner && (
-            <Panel title="Control center" subtitle="Быстрые runtime-флаги прямо из TSX-панели.">
-              <div className="admin-grid">
-                {(Object.keys(flags) as Array<keyof RuntimeFlags>).map((key) => (
-                  <button key={key} type="button" className="admin-card glass-soft" onClick={() => toggleAdminFlag(key)}>
-                    <div>
-                      <strong>{key}</strong>
-                      <span>{flags[key] ? "Enabled" : "Disabled"}</span>
-                    </div>
-                    <div className={classNames("admin-toggle", flags[key] && "on")} />
-                  </button>
-                ))}
-              </div>
-            </Panel>
-          )}
-        </section>
-      </main>
-
-      {result && (
-        <div className="result-overlay" role="dialog" aria-modal="true">
-          <div className="result-backdrop" onClick={() => setResult(null)} />
-          <div className="result-card glass" style={{ borderColor: `${currentResultTheme.border}77` }}>
-            <div className="result-aura" style={{ background: currentResultTheme.glow }} />
-            <p className="eyebrow-pill subtle">Spin Result</p>
-            <div className="result-emoji">{result.emoji}</div>
-            <h3>{result.name}</h3>
-            <p className="result-rarity" style={{ color: currentResultTheme.border }}>
-              {result.rarity}
-            </p>
-            <p className="result-text">{resultNote}</p>
-            <button type="button" className="primary-button" onClick={() => setResult(null)}>
-              Забрать
-            </button>
+            <section className="screen">
+              <TopScreen leaderboard={boot.leaderboard} />
+            </section>
           </div>
         </div>
+      </div>
+
+      <BottomNav activeScreen={activeScreen} onChange={setActiveScreen} />
+
+      {boot.is_owner && ownerSheetOpen && (
+        <OwnerSheet
+          user={boot.user}
+          flags={boot.flags}
+          spinCost={boot.config.spin_cost}
+          onToggle={toggleAdminFlag}
+          onClose={() => setOwnerSheetOpen(false)}
+        />
       )}
 
-      {toast && <div className="toast glass-soft">{toast}</div>}
+      {result && (
+        <ResultSheet
+          result={result}
+          note={resultNote}
+          theme={currentResultTheme}
+          onClose={() => setResult(null)}
+        />
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
 
-function CubeWidget({ wins, refreshTick }: { wins: number; refreshTick: number }) {
+function LoadingState() {
   return (
-    <div className="cube-shell" data-refresh={refreshTick}>
-      <div className="cube-meta glass-soft">
-        <span>Dark cube engine</span>
-        <strong>{wins} wins synced</strong>
+    <div className="miniapp-shell miniapp-shell--loading">
+      <div className="loading-badge">◈</div>
+      <p className="loading-title">Swag Gift</p>
+      <p className="loading-text">Загружаем мини-приложение...</p>
+    </div>
+  );
+}
+
+function HeaderSheet({
+  user,
+  freeUsed,
+  liveConnected,
+  isOwner,
+  onOwnerOpen,
+}: {
+  user: User;
+  freeUsed: boolean;
+  liveConnected: boolean;
+  isOwner: boolean;
+  onOwnerOpen: () => void;
+}) {
+  return (
+    <header className="header-sheet facet-card">
+      <div className="header-row">
+        <div className="brand-row">
+          <div className="avatar-mark">{initialsOf(user)}</div>
+          <div>
+            <h1 className="app-title">Swag Gift</h1>
+            <p className="app-subtitle">{rankTitle(user.wins)}</p>
+          </div>
+        </div>
+        {isOwner && (
+          <button type="button" className="owner-button" onClick={onOwnerOpen}>
+            Управление
+          </button>
+        )}
       </div>
-      <div className="cube-scene">
-        <div className="cube">
-          <div className="cube-face front">SG</div>
-          <div className="cube-face back">TG</div>
-          <div className="cube-face left">WIN</div>
-          <div className="cube-face right">LIVE</div>
-          <div className="cube-face top">STAR</div>
-          <div className="cube-face bottom">DROP</div>
+
+      <div className="header-status">
+        <StatusChip label={liveConnected ? "Лента в эфире" : "Лента переподключается"} active={liveConnected} />
+        <StatusChip label={freeUsed ? "Шанс использован" : "Бесплатный шанс доступен"} active={!freeUsed} />
+      </div>
+
+      <div className="stats-grid">
+        <MetricCard label="Побед" value={String(user.wins)} />
+        <MetricCard label="Спинов" value={String(user.spins)} />
+        <MetricCard label="Потрачено" value={`${user.stars_spent}⭐`} />
+      </div>
+    </header>
+  );
+}
+
+function SpinScreen({
+  boot,
+  spinning,
+  reelItems,
+  reelOffset,
+  reelDuration,
+  reelTrackRef,
+  onPaidSpin,
+  onFreeSpin,
+}: {
+  boot: BootstrapResponse;
+  spinning: boolean;
+  reelItems: Prize[];
+  reelOffset: number;
+  reelDuration: string;
+  reelTrackRef: RefObject<HTMLDivElement | null>;
+  onPaidSpin: () => void;
+  onFreeSpin: () => void;
+}) {
+  return (
+    <div className="screen-stack">
+      <section className="spin-sheet facet-card">
+        <div className="section-top">
+          <div>
+            <p className="section-kicker">Главный экран</p>
+            <h2 className="section-title">Крутить рулетку</h2>
+          </div>
+          <div className="price-chip">{boot.config.spin_cost}⭐</div>
+        </div>
+
+        <div className="roulette-shell">
+          <div className="roulette-marker" />
+          <div
+            ref={reelTrackRef}
+            className="roulette-track"
+            style={{ transform: `translateX(${reelOffset}px)`, transitionDuration: reelDuration }}
+          >
+            {reelItems.map((prize, index) => {
+              const theme = rarityTheme[prize.rarity] ?? rarityTheme.Промах;
+              return (
+                <article
+                  key={`${prize.key}-${index}`}
+                  data-roulette-card="true"
+                  className="roulette-card"
+                  style={
+                    {
+                      "--roulette-border": theme.border,
+                      "--roulette-glow": theme.glow,
+                    } as CSSProperties
+                  }
+                >
+                  <span className="roulette-card__emoji">{prize.emoji}</span>
+                  <strong>{prize.name}</strong>
+                  <span>{prize.rarity}</span>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="cta-column">
+          <button type="button" className="primary-cta" disabled={spinning} onClick={onPaidSpin}>
+            Крутить за {boot.config.spin_cost} ⭐
+          </button>
+          <button type="button" className="secondary-cta" disabled={spinning || boot.free_used} onClick={onFreeSpin}>
+            {boot.free_used ? "Бесплатный шанс уже взят" : "Бесплатный шанс"}
+          </button>
+        </div>
+      </section>
+
+      <section className="preview-sheet facet-card facet-card--soft">
+        <div className="section-top">
+          <div>
+            <p className="section-kicker">Сейчас в ленте</p>
+            <h2 className="section-title section-title--small">Последние выигрыши</h2>
+          </div>
+        </div>
+
+        <div className="compact-list">
+          {boot.history.length ? (
+            boot.history.slice(0, 3).map((item, index) => {
+              const found = boot.prizes_catalog.find(
+                (prize) => prize.key === item.prize_key || prize.name === item.prize_name
+              );
+              return (
+                <div key={`${item.prize_key}-${item.won_at}-${index}`} className="compact-row">
+                  <div className="compact-icon">{found?.emoji ?? "🎁"}</div>
+                  <div className="compact-copy">
+                    <strong>{item.first_name || item.username || "Игрок"}</strong>
+                    <span>
+                      {item.prize_name} • {formatDate(item.won_at)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="compact-row compact-row--empty">
+              <div className="compact-copy">
+                <strong>Лента скоро заполнится</strong>
+                <span>Первые выигрыши появятся здесь автоматически.</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function HistoryScreen({ history, catalog }: { history: HistoryRow[]; catalog: Prize[] }) {
+  return (
+    <ScreenSection title="Лента" subtitle="Последние выигрыши игроков">
+      <div className="list-stack">
+        {history.length ? (
+          history.map((item, index) => {
+            const found = catalog.find((prize) => prize.key === item.prize_key || prize.name === item.prize_name);
+            const theme = rarityTheme[item.rarity] ?? rarityTheme.Промах;
+            return (
+              <ListCard
+                key={`${item.prize_key}-${item.won_at}-${index}`}
+                icon={found?.emoji ?? "🎁"}
+                title={item.first_name || item.username || "Игрок"}
+                subtitle={`${item.prize_name} • ${formatDate(item.won_at)}`}
+                badge={item.rarity}
+                badgeColor={theme.border}
+              />
+            );
+          })
+        ) : (
+          <EmptyState title="Пока тихо" copy="Как только кто-то выиграет приз, запись появится здесь." />
+        )}
+      </div>
+    </ScreenSection>
+  );
+}
+
+function InventoryScreen({
+  user,
+  prizes,
+  catalog,
+}: {
+  user: User;
+  prizes: InventoryItem[];
+  catalog: Prize[];
+}) {
+  return (
+    <ScreenSection title="Профиль" subtitle={`${user.first_name || user.username || "Игрок"} • ${rankTitle(user.wins)}`}>
+      <div className="profile-banner facet-card facet-card--soft">
+        <div className="profile-banner__item">
+          <span>Победы</span>
+          <strong>{user.wins}</strong>
+        </div>
+        <div className="profile-banner__item">
+          <span>Спины</span>
+          <strong>{user.spins}</strong>
+        </div>
+        <div className="profile-banner__item">
+          <span>Звёзды</span>
+          <strong>{user.stars_spent}⭐</strong>
         </div>
       </div>
-    </div>
+
+      <div className="list-stack">
+        {prizes.length ? (
+          prizes.map((item) => {
+            const found = catalog.find((prize) => prize.key === item.key || prize.name === item.name);
+            const theme = rarityTheme[item.rarity] ?? rarityTheme.Промах;
+            const badges = [
+              item.free ? "БЕСПЛАТНО" : "",
+              item.demo ? "ТЕСТ" : "",
+            ].filter(Boolean);
+
+            return (
+              <ListCard
+                key={`${item.key}-${item.date}`}
+                icon={found?.emoji ?? "🎁"}
+                title={item.name}
+                subtitle={formatDate(item.date)}
+                badge={item.rarity}
+                badgeColor={theme.border}
+                extraBadges={badges}
+              />
+            );
+          })
+        ) : (
+          <EmptyState title="Пока пусто" copy="После первого выигрыша приз появится здесь." />
+        )}
+      </div>
+    </ScreenSection>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function TopScreen({ leaderboard }: { leaderboard: LeaderboardRow[] }) {
   return (
-    <div className="metric glass-soft">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+    <ScreenSection title="Топ" subtitle="Лидеры по победам">
+      <div className="list-stack">
+        {leaderboard.length ? (
+          leaderboard.map((item, index) => (
+            <div key={item.user_id} className="list-card facet-card facet-card--soft">
+              <div className="list-card__rank">{index + 1}</div>
+              <div className="list-card__copy">
+                <strong>{item.first_name || item.username || "Игрок"}</strong>
+                <span>
+                  {item.spins} спинов • {item.stars_spent}⭐
+                </span>
+              </div>
+              <div className="list-card__wins">{item.wins}</div>
+            </div>
+          ))
+        ) : (
+          <EmptyState title="Рейтинг пуст" copy="Топ заполнится, когда начнутся спины." />
+        )}
+      </div>
+    </ScreenSection>
   );
 }
 
-function Panel({
+function ScreenSection({
   title,
   subtitle,
   children,
@@ -724,30 +764,178 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="panel glass">
-      <div className="section-head">
-        <div>
-          <h2>{title}</h2>
-          <p className="section-subtitle">{subtitle}</p>
+    <div className="screen-stack">
+      <section className="section-sheet facet-card">
+        <div className="section-top section-top--stack">
+          <p className="section-kicker">{title}</p>
+          <h2 className="section-title">{title}</h2>
+          <p className="section-caption">{subtitle}</p>
         </div>
-      </div>
-      {children}
-    </section>
+        {children}
+      </section>
+    </div>
   );
 }
 
-function InfoTile({ title, value }: { title: string; value: string }) {
+function ListCard({
+  icon,
+  title,
+  subtitle,
+  badge,
+  badgeColor,
+  extraBadges = [],
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  badge: string;
+  badgeColor: string;
+  extraBadges?: string[];
+}) {
   return (
-    <article className="info-tile glass-soft">
-      <span>{title}</span>
+    <div className="list-card facet-card facet-card--soft">
+      <div className="list-card__icon">{icon}</div>
+      <div className="list-card__copy">
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+      </div>
+      <div className="list-card__badges">
+        {extraBadges.map((extra) => (
+          <span key={extra} className="text-badge text-badge--soft">
+            {extra}
+          </span>
+        ))}
+        <span className="text-badge" style={{ color: badgeColor }}>
+          {badge}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric-card facet-card facet-card--soft">
+      <span>{label}</span>
       <strong>{value}</strong>
-    </article>
+    </div>
+  );
+}
+
+function StatusChip({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className={classNames("status-chip", active && "status-chip--active")}>
+      {label}
+    </div>
+  );
+}
+
+function BottomNav({
+  activeScreen,
+  onChange,
+}: {
+  activeScreen: ScreenKey;
+  onChange: (screen: ScreenKey) => void;
+}) {
+  return (
+    <nav className="bottom-nav facet-card">
+      {screens.map((screen) => (
+        <button
+          key={screen.key}
+          type="button"
+          className={classNames("bottom-nav__button", activeScreen === screen.key && "active")}
+          onClick={() => onChange(screen.key)}
+        >
+          <span className="bottom-nav__icon">{screen.icon}</span>
+          <span className="bottom-nav__label">{screen.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function OwnerSheet({
+  user,
+  flags,
+  spinCost,
+  onToggle,
+  onClose,
+}: {
+  user: User;
+  flags: RuntimeFlags;
+  spinCost: number;
+  onToggle: (key: keyof RuntimeFlags) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="sheet-overlay">
+      <div className="sheet-overlay__backdrop" onClick={onClose} />
+      <section className="bottom-sheet facet-card">
+        <div className="sheet-head">
+          <div>
+            <p className="section-kicker">Владелец</p>
+            <h2 className="section-title section-title--small">Управление</h2>
+          </div>
+          <button type="button" className="sheet-close" onClick={onClose}>
+            Закрыть
+          </button>
+        </div>
+
+        <div className="owner-summary facet-card facet-card--soft">
+          <span>Владелец {user.user_id}</span>
+          <strong>{spinCost}⭐ за спин</strong>
+        </div>
+
+        <div className="owner-grid">
+          {(Object.keys(flags) as Array<keyof RuntimeFlags>).map((key) => (
+            <button key={key} type="button" className="owner-toggle facet-card facet-card--soft" onClick={() => onToggle(key)}>
+              <div>
+                <strong>{key}</strong>
+                <span>{flags[key] ? "Включено" : "Выключено"}</span>
+              </div>
+              <span className={classNames("owner-toggle__dot", flags[key] && "active")} />
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ResultSheet({
+  result,
+  note,
+  theme,
+  onClose,
+}: {
+  result: Prize;
+  note: string;
+  theme: { glow: string; border: string };
+  onClose: () => void;
+}) {
+  return (
+    <div className="sheet-overlay">
+      <div className="sheet-overlay__backdrop" onClick={onClose} />
+      <section className="bottom-sheet bottom-sheet--result facet-card" style={{ borderColor: `${theme.border}70` }}>
+        <div className="result-sheet__aura" style={{ background: theme.glow }} />
+        <p className="section-kicker">Результат</p>
+        <div className="result-sheet__emoji">{result.emoji}</div>
+        <h2 className="section-title section-title--small">{result.name}</h2>
+        <p className="result-sheet__rarity" style={{ color: theme.border }}>
+          {result.rarity}
+        </p>
+        <p className="result-sheet__note">{note}</p>
+        <button type="button" className="primary-cta" onClick={onClose}>
+          Забрать
+        </button>
+      </section>
+    </div>
   );
 }
 
 function EmptyState({ title, copy }: { title: string; copy: string }) {
   return (
-    <div className="empty-state glass-soft">
+    <div className="empty-card facet-card facet-card--soft">
       <strong>{title}</strong>
       <span>{copy}</span>
     </div>
