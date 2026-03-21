@@ -1,8 +1,11 @@
+import asyncio
 import json
 import logging
+import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import aiosqlite
 
@@ -14,88 +17,103 @@ def utc_now_iso() -> str:
 
 
 class Database:
+    _setup_locks: Dict[str, asyncio.Lock] = {}
+    _setup_done: set[str] = set()
+
     def __init__(self, path: Path):
         self.path = str(path)
+        self.journal_mode = os.environ.get("DB_JOURNAL_MODE", "DELETE").upper()
 
-    async def _connect(self) -> aiosqlite.Connection:
-        db = await aiosqlite.connect(self.path)
-        db.row_factory = aiosqlite.Row
-        await db.execute("PRAGMA foreign_keys = ON")
-        await db.execute("PRAGMA journal_mode = WAL")
-        await db.execute("PRAGMA synchronous = NORMAL")
-        await db.execute("PRAGMA busy_timeout = 5000")
-        return db
+    @asynccontextmanager
+    async def _connection(self) -> AsyncIterator[aiosqlite.Connection]:
+        db = await aiosqlite.connect(self.path, timeout=30)
+        try:
+            db.row_factory = aiosqlite.Row
+            await db.execute("PRAGMA foreign_keys = ON")
+            await db.execute("PRAGMA synchronous = NORMAL")
+            await db.execute("PRAGMA busy_timeout = 15000")
+            yield db
+        finally:
+            await db.close()
 
     async def setup(self) -> None:
-        async with await self._connect() as db:
-            await db.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id INTEGER PRIMARY KEY,
-                    username TEXT DEFAULT '',
-                    first_name TEXT DEFAULT '',
-                    spins INTEGER DEFAULT 0,
-                    wins INTEGER DEFAULT 0,
-                    stars_spent INTEGER DEFAULT 0,
-                    is_banned INTEGER DEFAULT 0,
-                    free_used INTEGER DEFAULT 0,
-                    joined_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
+        lock = self._setup_locks.setdefault(self.path, asyncio.Lock())
+        async with lock:
+            if self.path in self._setup_done:
+                return
 
-                CREATE TABLE IF NOT EXISTS prizes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    prize_key TEXT NOT NULL,
-                    prize_name TEXT NOT NULL,
-                    rarity TEXT NOT NULL,
-                    is_demo INTEGER DEFAULT 0,
-                    is_free INTEGER DEFAULT 0,
-                    won_at TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-                );
+            async with self._connection() as db:
+                await db.execute(f"PRAGMA journal_mode = {self.journal_mode}")
+                await db.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id INTEGER PRIMARY KEY,
+                        username TEXT DEFAULT '',
+                        first_name TEXT DEFAULT '',
+                        spins INTEGER DEFAULT 0,
+                        wins INTEGER DEFAULT 0,
+                        stars_spent INTEGER DEFAULT 0,
+                        is_banned INTEGER DEFAULT 0,
+                        free_used INTEGER DEFAULT 0,
+                        joined_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
 
-                CREATE TABLE IF NOT EXISTS payments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    charge_id TEXT NOT NULL UNIQUE,
-                    amount INTEGER NOT NULL,
-                    refunded INTEGER DEFAULT 0,
-                    paid_at TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-                );
+                    CREATE TABLE IF NOT EXISTS prizes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        prize_key TEXT NOT NULL,
+                        prize_name TEXT NOT NULL,
+                        rarity TEXT NOT NULL,
+                        is_demo INTEGER DEFAULT 0,
+                        is_free INTEGER DEFAULT 0,
+                        won_at TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                    );
 
-                CREATE TABLE IF NOT EXISTS pending_spins (
-                    uid INTEGER PRIMARY KEY,
-                    result TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY (uid) REFERENCES users(user_id) ON DELETE CASCADE
-                );
+                    CREATE TABLE IF NOT EXISTS payments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        charge_id TEXT NOT NULL UNIQUE,
+                        amount INTEGER NOT NULL,
+                        refunded INTEGER DEFAULT 0,
+                        paid_at TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                    );
 
-                CREATE INDEX IF NOT EXISTS idx_prizes_user_won_at ON prizes(user_id, won_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_prizes_won_at ON prizes(won_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_users_joined_at ON users(joined_at DESC);
-                """
-            )
+                    CREATE TABLE IF NOT EXISTS pending_spins (
+                        uid INTEGER PRIMARY KEY,
+                        result TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (uid) REFERENCES users(user_id) ON DELETE CASCADE
+                    );
 
-            for table, col, dfn in [
-                ("users", "stars_spent", "INTEGER DEFAULT 0"),
-                ("users", "is_banned", "INTEGER DEFAULT 0"),
-                ("users", "free_used", "INTEGER DEFAULT 0"),
-                ("users", "updated_at", f"TEXT NOT NULL DEFAULT '{utc_now_iso()}'"),
-                ("prizes", "is_free", "INTEGER DEFAULT 0"),
-            ]:
-                try:
-                    await db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {dfn}")
-                except Exception:
-                    pass
+                    CREATE INDEX IF NOT EXISTS idx_prizes_user_won_at ON prizes(user_id, won_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_prizes_won_at ON prizes(won_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_users_joined_at ON users(joined_at DESC);
+                    """
+                )
 
-            await db.commit()
-        log.info("Database ready: %s", self.path)
+                for table, col, dfn in [
+                    ("users", "stars_spent", "INTEGER DEFAULT 0"),
+                    ("users", "is_banned", "INTEGER DEFAULT 0"),
+                    ("users", "free_used", "INTEGER DEFAULT 0"),
+                    ("users", "updated_at", f"TEXT NOT NULL DEFAULT '{utc_now_iso()}'"),
+                    ("prizes", "is_free", "INTEGER DEFAULT 0"),
+                ]:
+                    try:
+                        await db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {dfn}")
+                    except Exception:
+                        pass
+
+                await db.commit()
+
+            self._setup_done.add(self.path)
+            log.info("Database ready: %s | journal_mode=%s", self.path, self.journal_mode)
 
     async def ensure_user(self, uid: int, username: str, first_name: str) -> None:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             now = utc_now_iso()
             await db.execute(
                 """
@@ -111,7 +129,7 @@ class Database:
             await db.commit()
 
     async def get_user(self, uid: int) -> Optional[Dict[str, Any]]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute("SELECT * FROM users WHERE user_id = ?", (uid,)) as cur:
                 row = await cur.fetchone()
                 return dict(row) if row else None
@@ -121,7 +139,7 @@ class Database:
         return bool(user["is_banned"]) if user else False
 
     async def set_ban(self, uid: int, state: bool) -> None:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             await db.execute(
                 "UPDATE users SET is_banned = ?, updated_at = ? WHERE user_id = ?",
                 (int(state), utc_now_iso(), uid),
@@ -133,7 +151,7 @@ class Database:
         return bool(user["free_used"]) if user else False
 
     async def mark_free_used(self, uid: int) -> None:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             await db.execute(
                 "UPDATE users SET free_used = 1, updated_at = ? WHERE user_id = ?",
                 (utc_now_iso(), uid),
@@ -151,7 +169,7 @@ class Database:
         charge_id: str = "",
     ) -> None:
         won = prize["type"] != "nothing"
-        async with await self._connect() as db:
+        async with self._connection() as db:
             await db.execute(
                 """
                 UPDATE users
@@ -194,7 +212,7 @@ class Database:
             await db.commit()
 
     async def get_prizes(self, uid: int, limit: int = 20) -> List[Dict[str, Any]]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 """
                 SELECT prize_key, prize_name, rarity, is_demo, is_free, won_at
@@ -219,7 +237,7 @@ class Database:
                 ]
 
     async def get_global_history(self, limit: int = 20) -> List[Dict[str, Any]]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 """
                 SELECT p.*, u.first_name, u.username
@@ -234,16 +252,13 @@ class Database:
                 return [dict(row) for row in await cur.fetchall()]
 
     async def get_payment(self, charge_id: str) -> Optional[Dict[str, Any]]:
-        async with await self._connect() as db:
-            async with db.execute(
-                "SELECT * FROM payments WHERE charge_id = ?",
-                (charge_id,),
-            ) as cur:
+        async with self._connection() as db:
+            async with db.execute("SELECT * FROM payments WHERE charge_id = ?", (charge_id,)) as cur:
                 row = await cur.fetchone()
                 return dict(row) if row else None
 
     async def mark_refunded(self, charge_id: str) -> bool:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             cur = await db.execute(
                 "UPDATE payments SET refunded = 1 WHERE charge_id = ? AND refunded = 0",
                 (charge_id,),
@@ -252,7 +267,7 @@ class Database:
             return cur.rowcount > 0
 
     async def total_stars(self) -> int:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 "SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE refunded = 0"
             ) as cur:
@@ -260,20 +275,20 @@ class Database:
                 return int(row["total"]) if row else 0
 
     async def total_users(self) -> int:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute("SELECT COUNT(*) AS total FROM users") as cur:
                 row = await cur.fetchone()
                 return int(row["total"]) if row else 0
 
     async def total_spins(self) -> int:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute("SELECT COALESCE(SUM(spins), 0) AS total FROM users") as cur:
                 row = await cur.fetchone()
                 return int(row["total"]) if row else 0
 
     async def wins_today(self) -> int:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 """
                 SELECT COUNT(*) AS total
@@ -286,7 +301,7 @@ class Database:
                 return int(row["total"]) if row else 0
 
     async def leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 """
                 SELECT user_id, username, first_name, spins, wins, stars_spent
@@ -300,7 +315,7 @@ class Database:
                 return [dict(row) for row in await cur.fetchall()]
 
     async def get_users_list(self, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 """
                 SELECT user_id, username, first_name, spins, wins, stars_spent, is_banned
@@ -313,7 +328,7 @@ class Database:
                 return [dict(row) for row in await cur.fetchall()]
 
     async def recent_payments(self, limit: int = 8) -> List[Dict[str, Any]]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute(
                 """
                 SELECT p.*, u.first_name, u.username
@@ -327,13 +342,13 @@ class Database:
                 return [dict(row) for row in await cur.fetchall()]
 
     async def all_user_ids(self) -> List[int]:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             async with db.execute("SELECT user_id FROM users WHERE is_banned = 0") as cur:
                 rows = await cur.fetchall()
                 return [int(row["user_id"]) for row in rows]
 
     async def set_spin_result_by_uid(self, uid: int, result: Dict[str, Any]) -> None:
-        async with await self._connect() as db:
+        async with self._connection() as db:
             await db.execute(
                 """
                 INSERT INTO pending_spins (uid, result, created_at)
@@ -347,11 +362,8 @@ class Database:
             await db.commit()
 
     async def get_spin_result(self, uid: int) -> Optional[Dict[str, Any]]:
-        async with await self._connect() as db:
-            async with db.execute(
-                "SELECT result FROM pending_spins WHERE uid = ?",
-                (uid,),
-            ) as cur:
+        async with self._connection() as db:
+            async with db.execute("SELECT result FROM pending_spins WHERE uid = ?", (uid,)) as cur:
                 row = await cur.fetchone()
                 if not row:
                     return None
@@ -361,7 +373,10 @@ class Database:
             return json.loads(row["result"])
 
     async def get_dashboard_stats(self) -> Dict[str, int]:
-        total_users, total_spins, total_stars, wins_today = await self.total_users(), await self.total_spins(), await self.total_stars(), await self.wins_today()
+        total_users = await self.total_users()
+        total_spins = await self.total_spins()
+        total_stars = await self.total_stars()
+        wins_today = await self.wins_today()
         return {
             "users": total_users,
             "spins": total_spins,

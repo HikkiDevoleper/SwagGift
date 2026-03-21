@@ -6,6 +6,8 @@ from contextlib import suppress
 import uvicorn
 
 from bot import main as bot_main
+from config import DB_PATH
+from database import Database
 from server import app as fastapi_app
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s | %(message)s")
@@ -28,6 +30,8 @@ async def run_bot_forever() -> None:
 
 async def main() -> None:
     port = int(os.environ.get("PORT", 8000))
+    await Database(DB_PATH).setup()
+
     config = uvicorn.Config(
         fastapi_app,
         host="0.0.0.0",
