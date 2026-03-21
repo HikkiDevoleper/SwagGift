@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { type BootstrapResponse, type RuntimeFlags, type User, type InventoryItem } from "../types";
+import { type BootstrapResponse, type ScreenKey } from "../types";
 import { api, tg } from "../utils";
 
 export function useAppLogic() {
   const [boot, setBoot] = useState<BootstrapResponse | null>(null);
-  const [activeScreen, setActiveScreen] = useState<string>("spin");
+  const [activeScreen, setActiveScreen] = useState<ScreenKey>("spin");
   const [liveConnected, setLiveConnected] = useState(false);
   const [toast, setToast] = useState("");
   

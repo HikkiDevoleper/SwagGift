@@ -9,79 +9,88 @@ interface RouletteProps {
   winner?: Prize;
 }
 
-const CARD_W = 100;
+// MUST match CSS exactly:
+// .prize-card { min-width: 92px }  +  margin: 0 4px  →  step = 92 + 4*2 = 100
+const CARD_STEP = 100;
 
-export const Roulette: React.FC<RouletteProps> = ({ prizes, onSpinEnd, isSpinning, winner }) => {
-  const [reelItems, setReelItems] = useState<Prize[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [winIdx, setWinIdx] = useState(-1);
-  const spinning = useRef(false);
+export const Roulette: React.FC<RouletteProps> = ({
+  prizes, onSpinEnd, isSpinning, winner
+}) => {
+  const [reel, setReel]       = useState<Prize[]>([]);
+  const [offset, setOffset]   = useState(0);
+  const [dur, setDur]         = useState(0);
+  const [winIdx, setWinIdx]   = useState(-1);
+  const live = useRef(false);
 
+  // Idle reel on mount
   useEffect(() => {
-    if (prizes.length) setReelItems(makeReel(prizes).reel);
+    if (prizes.length) setReel(makeReel(prizes).reel);
   }, [prizes]);
 
   useEffect(() => {
-    if (!isSpinning || !winner || spinning.current) return;
-    spinning.current = true;
+    if (!isSpinning || !winner || live.current) return;
+    live.current = true;
 
-    const { reel, stopIndex } = makeReel(prizes, winner);
-    setReelItems(reel);
+    const { reel: newReel, stopIndex } = makeReel(prizes, winner);
+
+    // Reset — no transition, set to start
     setWinIdx(-1);
-    setDuration(0);
+    setDur(0);
     setOffset(0);
+    setReel(newReel);
 
-    // Reel is `left: 50%`. To center Card N:
-    // Left edge of Card N is `N * CARD_W`. Center of Card N is `N * CARD_W + (CARD_W / 2)`.
-    // Moving the reel left by that amount exactly centers the card on the pointer.
-    const target = -(stopIndex * CARD_W) - (CARD_W / 2);
-
+    // Two rAF ensures the browser has painted the reset before animating
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const span = 5.5;
-        setDuration(span);
+        // padding: 0 50% centers card 0 at the viewport center.
+        // To center card N: translate = -(N * STEP) - STEP/2
+        const target = -(stopIndex * CARD_STEP) - CARD_STEP / 2;
+
+        setDur(5.5);
         setOffset(target);
 
+        // Haptic: light → medium → heavy as reel decelerates
         let tick = 0;
-        const haptic = setInterval(() => {
+        const hap = setInterval(() => {
           tick++;
-          tg?.HapticFeedback?.impactOccurred?.(tick < 20 ? 'light' : tick < 40 ? 'medium' : 'heavy');
+          const f = tick < 22 ? 'light' : tick < 42 ? 'medium' : 'heavy';
+          tg?.HapticFeedback?.impactOccurred?.(f);
         }, 110);
 
         setTimeout(() => {
-          clearInterval(haptic);
+          clearInterval(hap);
           setWinIdx(stopIndex);
           tg?.HapticFeedback?.notificationOccurred?.('success');
-          spinning.current = false;
+          live.current = false;
           onSpinEnd(winner);
-        }, (span + 0.4) * 1000);
+        }, 5.9 * 1000);
       });
     });
   }, [isSpinning, winner]);
 
   useEffect(() => {
-    if (!isSpinning) spinning.current = false;
+    if (!isSpinning) live.current = false;
   }, [isSpinning]);
 
   return (
-    <div className="roulette-container">
-      <div className="roulette-pointer" />
+    <div className="reel-wrap">
+      <div className="reel-pointer" />
       <div
-        className="roulette-reel"
-        style={{
-          transform: `translateX(${offset}px)`,
-          transition: duration > 0 ? `transform ${duration}s cubic-bezier(0.16, 1, 0.3, 1)` : 'none',
-        }}
+        className="reel-track"
+        style={
+          dur > 0
+            ? { transform: `translateX(${offset}px)`, transition: `transform ${dur}s var(--ease-spin)` }
+            : { transform: `translateX(${offset}px)`, transition: 'none' }
+        }
       >
-        {reelItems.map((item, i) => (
+        {reel.map((item, i) => (
           <div
             key={i}
-            className={`prize-card rarity-${rarityClass(item.rarity)}${i === winIdx ? ' winner' : ''}`}
-            style={{ left: `${i * CARD_W}px` }}
+            className={`prize-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}
           >
-            <div className="prize-emoji">{item.emoji}</div>
-            <div className="prize-name">{item.name}</div>
+            <span className="prize-emoji">{item.emoji}</span>
+            <span className="prize-name">{item.name}</span>
+            <span className="prize-rarity">{item.rarity}</span>
           </div>
         ))}
       </div>

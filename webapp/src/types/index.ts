@@ -1,4 +1,4 @@
-export type ScreenKey = "spin" | "history" | "inventory" | "top";
+export type ScreenKey = "spin" | "inventory" | "top" | "profile";
 
 export type Prize = {
   key: string;
@@ -17,11 +17,13 @@ export type User = {
   spins: number;
   wins: number;
   stars_spent: number;
+  photo_url?: string | null;
 };
 
 export type InventoryItem = {
   key: string;
   name: string;
+  emoji?: string;
   rarity: string;
   demo: boolean;
   free: boolean;

@@ -11,96 +11,87 @@ interface AdminSheetProps {
 }
 
 const FLAG_META: Record<keyof RuntimeFlags, { title: string; sub: string }> = {
-  demo:    { title: "Демо-режим",        sub: "Спины без оплаты (только для вас)" },
-  gifts:   { title: "Отправка подарков",  sub: "Автовыдача призов через Telegram" },
-  maint:   { title: "Техрежим",          sub: "Закрыть доступ для игроков" },
-  testpay: { title: "Тест оплаты",       sub: "Резервный флаг" },
+  demo:    { title: 'Демо', sub: 'Спины без оплаты' },
+  gifts:   { title: 'Подарки', sub: 'Автовыдача в Telegram' },
+  maint:   { title: 'Техработы', sub: 'Закрыть для юзеров' },
+  testpay: { title: 'Тест оплаты', sub: 'Резервный флаг' },
 };
 
 export const AdminSheet: React.FC<AdminSheetProps> = ({
-  flags, onToggle, onClose, spinCost, prizes, onSaveWeights
+  flags, onToggle, onClose, spinCost, prizes, onSaveWeights,
 }) => {
   const [weights, setWeights] = useState<Record<string, number>>(() =>
     Object.fromEntries(prizes.map(p => [p.key, p.weight]))
   );
   const [dirty, setDirty] = useState(false);
 
-  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
 
-  const handleWeightChange = (key: string, value: string) => {
-    const num = Math.max(0, parseInt(value) || 0);
-    setWeights(prev => ({ ...prev, [key]: num }));
+  const set = (key: string, val: string) => {
+    setWeights(prev => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
     setDirty(true);
-  };
-
-  const handleSave = () => {
-    onSaveWeights(weights);
-    setDirty(false);
   };
 
   return (
     <>
-      <div className="sheet-backdrop" onClick={onClose} />
-      <div className="bottom-sheet">
-        <div className="sheet-handle" />
+      <div className="overlay" onClick={onClose} />
+      <div className="sheet">
+        <div className="sheet-bar" />
 
-        <div className="admin-header">
+        <div className="admin-hdr">
           <h2>Управление</h2>
-          <button className="btn-small" onClick={onClose}>Закрыть</button>
+          <button className="btn-sm" onClick={onClose}>Закрыть</button>
         </div>
 
-        <div className="admin-info">
-          <span className="label">Цена спина</span>
-          <span className="value">{spinCost} ⭐</span>
+        <div className="admin-row">
+          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Цена спина</span>
+          <span className="admin-cost-val">{spinCost} ⭐</span>
         </div>
 
-        {/* Flags */}
-        {(Object.keys(flags) as Array<keyof RuntimeFlags>).map((key) => {
-          const meta = FLAG_META[key];
+        {(Object.keys(flags) as Array<keyof RuntimeFlags>).map(key => {
           const on = flags[key];
+          const m  = FLAG_META[key];
           return (
-            <div
-              key={key}
-              className={`toggle-row${on ? ' toggle-row--on' : ''}`}
-              onClick={() => onToggle(key)}
-            >
-              <div className="list-content">
-                <div className="list-title">{meta.title}</div>
-                <div className="list-subtitle">{meta.sub}</div>
+            <div key={key} className={`toggle-row${on ? ' on' : ''}`} onClick={() => onToggle(key)}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{m.title}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{m.sub}</div>
               </div>
-              <div className={`toggle-track${on ? ' toggle-track--on' : ''}`}>
+              <div className={`toggle-track${on ? ' on' : ''}`}>
                 <div className="toggle-thumb" />
               </div>
             </div>
           );
         })}
 
-        {/* Weights Editor */}
-        <div className="admin-section-title">Шансы призов</div>
+        <div className="admin-section-lbl">Шансы призов</div>
         {prizes.map(p => (
           <div key={p.key} className="weight-row">
-            <div className="prize-label">
-              <span className="emoji">{p.emoji}</span>
-              {p.name}
-            </div>
+            <span className="weight-emoji">{p.emoji}</span>
+            <span className="weight-label">{p.name}</span>
             <input
               className="weight-input"
               type="number"
-              aria-label={`Шанс для ${p.name}`}
-              title="Шанс выпадения"
               min="0"
               max="999"
+              title={`Вес для ${p.name}`}
+              aria-label={`Вес для ${p.name}`}
               value={weights[p.key] ?? p.weight}
-              onChange={e => handleWeightChange(p.key, e.target.value)}
+              onChange={e => set(p.key, e.target.value)}
             />
             <span className="weight-pct">
-              {totalWeight > 0 ? Math.round((weights[p.key] / totalWeight) * 100) : 0}%
+              {total > 0 ? Math.round((weights[p.key] / total) * 100) : 0}%
             </span>
           </div>
         ))}
 
-        <button className="btn-save" onClick={handleSave} disabled={!dirty}>
-          Сохранить шансы
+        <button
+          className="btn-primary"
+          style={{ marginTop: 10 }}
+          disabled={!dirty}
+          onClick={() => { onSaveWeights(weights); setDirty(false); }}
+        >
+          Сохранить
         </button>
       </div>
     </>
