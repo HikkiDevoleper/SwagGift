@@ -14,11 +14,8 @@ export const Roulette: React.FC<RouletteProps> = ({ prizes, onSpinEnd, isSpinnin
   const [offset, setOffset] = useState(0);
   const [duration, setDuration] = useState(0);
   const reelRef = useRef<HTMLDivElement>(null);
-  const spinTimeoutRef = useRef<NodeJS.Timeout>();
-  const hapticIntervalRef = useRef<NodeJS.Timeout>();
 
   const CARD_WIDTH = 110; // width + margin
-  const SPIN_DURATION = 5.5; // seconds
 
   useEffect(() => {
     // Initial reel
@@ -32,41 +29,32 @@ export const Roulette: React.FC<RouletteProps> = ({ prizes, onSpinEnd, isSpinnin
       setDuration(0);
       setOffset(0);
 
-      // Force reflow to trigger animation
-      const reflow = setTimeout(() => {
-        setDuration(SPIN_DURATION);
+      // Force reflow
+      setTimeout(() => {
+        setDuration(6); // 6 seconds for more suspense
         const targetOffset = -(stopIndex * CARD_WIDTH) + (window.innerWidth / 2) - (CARD_WIDTH / 2);
         setOffset(targetOffset);
         
         // Haptic feedback during spin - escalating intensity
         let hapticCount = 0;
-        hapticIntervalRef.current = setInterval(() => {
+        const hapticInterval = setInterval(() => {
           hapticCount++;
-          if (hapticCount < 20) {
+          if (hapticCount < 30) {
             tg?.HapticFeedback.impactOccurred('light');
-          } else if (hapticCount < 35) {
+          } else if (hapticCount < 50) {
             tg?.HapticFeedback.impactOccurred('medium');
           } else {
             tg?.HapticFeedback.impactOccurred('heavy');
           }
-        }, 100);
+        }, 80);
 
-        // Finish spin and trigger callback
-        spinTimeoutRef.current = setTimeout(() => {
-          if (hapticIntervalRef.current) {
-            clearInterval(hapticIntervalRef.current);
-          }
+        setTimeout(() => {
+          clearInterval(hapticInterval);
           onSpinEnd(winner);
           // Victory haptic pattern
           tg?.HapticFeedback.notificationOccurred('success');
-        }, (SPIN_DURATION + 0.2) * 1000);
+        }, 6200);
       }, 50);
-
-      return () => {
-        clearTimeout(reflow);
-        if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
-        if (hapticIntervalRef.current) clearInterval(hapticIntervalRef.current);
-      };
     }
   }, [isSpinning, winner, prizes, onSpinEnd]);
 
