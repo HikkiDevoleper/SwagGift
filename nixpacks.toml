@@ -1,0 +1,9 @@
+providers = ["python", "node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "22"
+NIXPACKS_PYTHON_VERSION = "3.12"
+NIXPACKS_SPA_CADDY = "false"
+
+[start]
+cmd = "python run.py"
