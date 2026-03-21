@@ -86,6 +86,8 @@ export const AdminSheet: React.FC<AdminSheetProps> = ({
             <input
               className="weight-input"
               type="number"
+              aria-label={`Шанс для ${p.name}`}
+              title="Шанс выпадения"
               min="0"
               max="999"
               value={weights[p.key] ?? p.weight}
