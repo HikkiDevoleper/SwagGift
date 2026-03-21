@@ -90,3 +90,13 @@ PRIZES = [
 
 PRIZES_BY_KEY = {prize["key"]: prize for prize in PRIZES}
 TOTAL_WEIGHT = sum(prize["weight"] for prize in PRIZES)
+
+
+def update_weights(new_weights: dict[str, int]) -> None:
+    """Update prize weights at runtime from admin panel."""
+    global TOTAL_WEIGHT
+    for prize in PRIZES:
+        if prize["key"] in new_weights:
+            prize["weight"] = max(0, int(new_weights[prize["key"]]))
+    TOTAL_WEIGHT = sum(prize["weight"] for prize in PRIZES)
+

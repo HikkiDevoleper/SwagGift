@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import CHANNEL_ID, CHANNEL_URL, DB_PATH, OWNER_ID, PRIZES, SPIN_COST, TOKEN, TOTAL_WEIGHT
+from config import CHANNEL_ID, CHANNEL_URL, DB_PATH, OWNER_ID, PRIZES, SPIN_COST, TOKEN, TOTAL_WEIGHT, update_weights
 from database import Database
 from runtime_state import runtime_state
 
@@ -186,8 +186,10 @@ async def free_spin_api(request: Request) -> Dict[str, Any]:
 
 @app.post("/api/demo_spin")
 async def demo_spin_api(request: Request) -> Dict[str, Any]:
-    """Spin without payment when demo mode is enabled."""
+    """Spin without payment — owner only, when demo mode is enabled."""
     user = await get_telegram_user(request)
+    if user["id"] != OWNER_ID:
+        raise HTTPException(status_code=403, detail="Demo mode is owner-only")
     flags = await runtime_state.snapshot()
 
     if not flags["demo"]:
@@ -282,6 +284,27 @@ async def toggle_setting_api(request: Request) -> Dict[str, Any]:
 
     value = await runtime_state.toggle(key_map[key])
     return {"ok": True, "key": key, "value": value}
+
+
+@app.post("/api/admin/weights")
+async def update_weights_api(request: Request) -> Dict[str, Any]:
+    user = await get_telegram_user(request)
+    if user["id"] != OWNER_ID:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    body = await request.json()
+    weights = body.get("weights", {})
+    if not isinstance(weights, dict):
+        raise HTTPException(status_code=400, detail="Invalid weights format")
+
+    sanitized = {}
+    for key, value in weights.items():
+        if isinstance(key, str) and isinstance(value, (int, float)):
+            sanitized[key] = max(0, int(value))
+
+    update_weights(sanitized)
+    log.info("Weights updated by owner: %s", sanitized)
+    return {"ok": True, "prizes": PRIZES, "total_weight": TOTAL_WEIGHT}
 
 
 app.mount(
