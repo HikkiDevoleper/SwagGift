@@ -16,7 +16,8 @@ export const App: React.FC = () => {
     setLiveConnected,
     notify,
     refreshUser,
-    toast
+    toast,
+    toastType
   } = useAppLogic();
 
   const [isSpinning, setIsSpinning] = useState(false);
@@ -96,7 +97,7 @@ export const App: React.FC = () => {
           setIsSpinning(true);
         }
       } catch (e: any) {
-        notify(e.message || "Ошибка демо-прокрутки");
+        notify(e.message || "Ошибка демо-прокрутки", "error");
       }
       return;
     }
@@ -124,7 +125,7 @@ export const App: React.FC = () => {
         }
       });
     } catch (e: any) {
-      notify(e.message || "Ошибка при создании счета");
+      notify(e.message || "Ошибка при создании счета", "error");
     }
   };
 
@@ -140,11 +141,11 @@ export const App: React.FC = () => {
           if (ok) tg?.openLink(res.channel_url || boot.config.channel_url);
         });
       } else if (res.error === "already_used") {
-        notify("Бесплатный шанс уже использован");
+        notify("Бесплатный шанс уже использован", "info");
         refreshUser();
       }
     } catch (e: any) {
-      notify(e.message || "Ошибка при прокрутке");
+      notify(e.message || "Ошибка при прокрутке", "error");
     }
   };
 
@@ -156,10 +157,10 @@ export const App: React.FC = () => {
           ...boot,
           flags: { ...boot.flags, [key]: res.value }
         });
-        notify(`Настройка ${key} изменена на ${res.value ? 'ВКЛ' : 'ВЫКЛ'}`);
+        notify(`Настройка ${key} изменена на ${res.value ? 'ВКЛ' : 'ВЫКЛ'}`, "success");
       }
     } catch (e: any) {
-      notify(e.message || "Ошибка при изменении настройки");
+      notify(e.message || "Ошибка при изменении настройки", "error");
     }
   };
 
@@ -168,7 +169,7 @@ export const App: React.FC = () => {
     if (wonPrize.type !== 'nothing') {
       setShowResult(true);
     } else {
-      notify("В этот раз ничего не выпало...");
+      notify("В этот раз ничего не выпало...", "info");
     }
     refreshUser();
   };
@@ -339,7 +340,11 @@ export const App: React.FC = () => {
         />
       )}
 
-      {toast && <div className="toast" style={{ bottom: '80px' }}>{toast}</div>}
+      {toast && (
+        <div className={`toast toast--${toastType}`} style={{ bottom: '80px' }}>
+          {toast}
+        </div>
+      )}
     </div>
   );
 };

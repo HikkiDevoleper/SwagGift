@@ -5,3 +5,7 @@ builder = "nixpacks"
 startCommand = "python run.py"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 100
+restartPolicyMaxRetries = 5
+
+[env]
+NODE_ENV = "production"

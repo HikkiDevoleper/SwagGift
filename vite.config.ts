@@ -8,6 +8,22 @@ export default defineConfig({
   root: resolve(__dirname, "webapp"),
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
+    minify: "terser",
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      }
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom']
+        }
+      }
+    },
+    sourcemap: false,
+    reportCompressedSize: false
   }
 });
