@@ -78,8 +78,27 @@ const screens: Array<{ key: ScreenKey; label: string; icon: string }> = [
   { key: "spin", label: "Игра", icon: "◈" },
   { key: "history", label: "Лента", icon: "●" },
   { key: "inventory", label: "Профиль", icon: "◆" },
-  { key: "top", label: "Топ", icon: "▲" },
+  { key: "top", label: "Рейтинг", icon: "▲" },
 ];
+
+const ownerFlagMeta: Record<keyof RuntimeFlags, { title: string; subtitle: string }> = {
+  demo: {
+    title: "Демо-режим",
+    subtitle: "Тестовая запись выигрышей",
+  },
+  gifts: {
+    title: "Отправка подарков",
+    subtitle: "Автовыдача призов в Telegram",
+  },
+  maint: {
+    title: "Техрежим",
+    subtitle: "Ограничить вход для игроков",
+  },
+  testpay: {
+    title: "Тест оплаты",
+    subtitle: "Резервный флаг владельца",
+  },
+};
 
 const rarityTheme: Record<string, { glow: string; border: string }> = {
   "Обычный": { glow: "rgba(72, 196, 133, 0.22)", border: "#48c485" },
@@ -523,8 +542,8 @@ function HeaderSheet({
       </div>
 
       <div className="header-status">
-        <StatusChip label={liveConnected ? "Лента в эфире" : "Лента переподключается"} active={liveConnected} />
-        <StatusChip label={freeUsed ? "Шанс использован" : "Бесплатный шанс доступен"} active={!freeUsed} />
+        <StatusChip label={liveConnected ? "Лента активна" : "Лента ждёт"} active={liveConnected} />
+        <StatusChip label={freeUsed ? "Шанс использован" : "Шанс доступен"} active={!freeUsed} />
       </div>
 
       <div className="stats-grid">
@@ -731,7 +750,7 @@ function InventoryScreen({
 
 function TopScreen({ leaderboard }: { leaderboard: LeaderboardRow[] }) {
   return (
-    <ScreenSection title="Топ" subtitle="Лидеры по победам">
+    <ScreenSection title="Рейтинг" subtitle="Лидеры по победам">
       <div className="list-stack">
         {leaderboard.length ? (
           leaderboard.map((item, index) => (
@@ -747,7 +766,7 @@ function TopScreen({ leaderboard }: { leaderboard: LeaderboardRow[] }) {
             </div>
           ))
         ) : (
-          <EmptyState title="Рейтинг пуст" copy="Топ заполнится, когда начнутся спины." />
+          <EmptyState title="Рейтинг пуст" copy="Список появится, когда начнутся спины." />
         )}
       </div>
     </ScreenSection>
@@ -887,15 +906,27 @@ function OwnerSheet({
         </div>
 
         <div className="owner-grid">
-          {(Object.keys(flags) as Array<keyof RuntimeFlags>).map((key) => (
-            <button key={key} type="button" className="owner-toggle facet-card facet-card--soft" onClick={() => onToggle(key)}>
-              <div>
-                <strong>{key}</strong>
-                <span>{flags[key] ? "Включено" : "Выключено"}</span>
-              </div>
-              <span className={classNames("owner-toggle__dot", flags[key] && "active")} />
-            </button>
-          ))}
+          {(Object.keys(flags) as Array<keyof RuntimeFlags>).map((key) => {
+            const meta = ownerFlagMeta[key];
+
+            return (
+              <button
+                key={key}
+                type="button"
+                className="owner-toggle facet-card facet-card--soft"
+                onClick={() => onToggle(key)}
+              >
+                <div className="owner-toggle__meta">
+                  <strong>{meta.title}</strong>
+                  <span>{meta.subtitle}</span>
+                </div>
+                <div className="owner-toggle__state">
+                  <span>{flags[key] ? "Вкл" : "Выкл"}</span>
+                  <span className={classNames("owner-toggle__dot", flags[key] && "active")} />
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
     </div>

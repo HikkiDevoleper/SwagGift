@@ -591,7 +591,8 @@ select {
 }
 
 .bottom-nav__label {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
+  line-height: 1.1;
 }
 
 .sheet-overlay {
@@ -639,6 +640,25 @@ select {
 
 .owner-toggle {
   padding: 14px 12px;
+}
+
+.owner-toggle__meta {
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.owner-toggle__state {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.owner-toggle__state span:first-child {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .owner-toggle__dot {
