@@ -1,0 +1,67 @@
+{
+  "gifts": [
+    {
+      "title": "кольцо",
+      "file": "кольцо.tgs",
+      "weight": 8,
+      "rarity": "rare",
+      "value": 120
+    },
+    {
+      "title": "кубок",
+      "file": "кубок.tgs",
+      "weight": 6,
+      "rarity": "rare",
+      "value": 150
+    },
+    {
+      "title": "мишка",
+      "file": "мишка.tgs",
+      "weight": 16,
+      "rarity": "common",
+      "value": 40
+    },
+    {
+      "title": "подарок",
+      "file": "подарок.tgs",
+      "weight": 20,
+      "rarity": "common",
+      "value": 30
+    },
+    {
+      "title": "ракета",
+      "file": "ракета.tgs",
+      "weight": 5,
+      "rarity": "epic",
+      "value": 220
+    },
+    {
+      "title": "роза",
+      "file": "роза.tgs",
+      "weight": 12,
+      "rarity": "common",
+      "value": 50
+    },
+    {
+      "title": "сердце",
+      "file": "сердце.tgs",
+      "weight": 10,
+      "rarity": "uncommon",
+      "value": 70
+    },
+    {
+      "title": "торт",
+      "file": "торт.tgs",
+      "weight": 9,
+      "rarity": "uncommon",
+      "value": 80
+    },
+    {
+      "title": "цветы",
+      "file": "цветы.tgs",
+      "weight": 14,
+      "rarity": "common",
+      "value": 45
+    }
+  ]
+}

@@ -32,7 +32,7 @@ export const App: React.FC = () => {
   const [showTopup, setShowTopup] = useState(false);
   const spinRef = useRef(false);
 
-  /* ── SSE: history suppressed during spin (spoiler fix), leaderboard always live ── */
+  /* ── SSE: always live (ticker is always visible, shows everyone's wins) ── */
   useEffect(() => {
     if (!boot) return;
     let es: EventSource;
@@ -48,8 +48,7 @@ export const App: React.FC = () => {
             return {
               ...p,
               leaderboard: d.leaderboard ?? p.leaderboard,
-              // Only update history when NOT spinning — prevents spoiler
-              history: spinRef.current ? p.history : (d.history ?? p.history),
+              history: d.history ?? p.history,
             };
           });
         } catch {}
@@ -193,7 +192,6 @@ export const App: React.FC = () => {
         {activeScreen === 'spin' && (
           <SpinPage
             boot={boot} spinning={spinning} winner={winner} isDemo={isDemo}
-            showHistory={!spinRef.current}
             onSpin={doSpin} onFreeSpin={doFree} onSpinEnd={onSpinEnd}
             onTopup={() => setShowTopup(true)}
           />

@@ -805,6 +805,15 @@ body {
   position: relative;
 }
 
+.res-sticker {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 10px;
+  position: relative;
+  z-index: 1;
+  animation: resBounce 0.6s var(--ease);
+}
+
 .res-glow {
   position: absolute;
   top: -20px; left: 50%;

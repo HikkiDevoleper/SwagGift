@@ -13,10 +13,13 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
+    "lottie-web": "^5.13.0",
+    "pako": "^2.1.0",
     "react": "^19",
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@types/pako": "^2.0.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react-swc": "^4",

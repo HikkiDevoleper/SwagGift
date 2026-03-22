@@ -1,4 +1,5 @@
 import React from 'react';
+import { TgsPlayer } from './TgsPlayer';
 import { type Prize } from '../types';
 
 interface Props {
@@ -15,7 +16,13 @@ export const WinSheet: React.FC<Props> = ({ winner, sellValue, onClaim, onSell }
       <div className="sheet-bar" />
       <div className="res">
         <div className="res-glow" />
-        <span className="res-emoji bounce">{winner.emoji}</span>
+        {winner.tgs ? (
+          <div className="res-sticker">
+            <TgsPlayer src={`/gifts/${winner.tgs}`} size={140} loop autoplay />
+          </div>
+        ) : (
+          <span className="res-emoji bounce">{winner.emoji}</span>
+        )}
         <h2 className="res-title">{winner.name}</h2>
         <p className="res-sub">{winner.rarity}</p>
         <div className="btn-row">

@@ -8,6 +8,7 @@ export type Prize = {
   weight: number;
   type: "gift" | "nothing";
   sell_value: number;
+  tgs?: string | null;
   gift_id?: string | null;
 };
 
