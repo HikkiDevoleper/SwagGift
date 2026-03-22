@@ -66,7 +66,6 @@ export type BootstrapResponse = {
   config: {
     spin_cost: number;
     channel_url: string;
-    channel_id: string;
   };
   prizes_catalog: Prize[];
   flags: RuntimeFlags;

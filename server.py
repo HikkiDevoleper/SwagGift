@@ -48,14 +48,11 @@ def verify_init_data(init_data_raw: str, bot_token: str) -> Dict[str, Any]:
         received_hash = params.pop("hash", None)
         if not received_hash:
             raise HTTPException(status_code=401, detail="Telegram hash missing")
-
         data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(params.items()))
         secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
         expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
-
         if not hmac.compare_digest(expected_hash, received_hash):
             raise HTTPException(status_code=403, detail="Invalid Telegram signature")
-
         user = json.loads(params.get("user", "{}"))
         if not user or "id" not in user:
             raise HTTPException(status_code=401, detail="Telegram user missing")
@@ -75,9 +72,19 @@ async def get_telegram_user(request: Request) -> Dict[str, Any]:
 
 
 def no_store_json(payload: Dict[str, Any]) -> JSONResponse:
-    response = JSONResponse(payload)
-    response.headers["Cache-Control"] = "no-store"
-    return response
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
+async def check_subscription(uid: int) -> bool:
+    """Check if user is subscribed to the channel."""
+    if not CHANNEL_ID:
+        return True
+    try:
+        member = await bot_instance.get_chat_member(CHANNEL_ID, uid)
+        return member.status in ("member", "administrator", "creator")
+    except Exception as exc:
+        log.warning("Sub check failed for %s: %s", uid, exc)
+        return False
 
 
 # ─── Startup ─────────────────────────────────────────
@@ -89,11 +96,9 @@ async def startup() -> None:
     log.info("Server startup complete")
 
 
-# ─── Health ──────────────────────────────────────────
-
 @app.get("/api/health")
 async def healthcheck() -> Dict[str, Any]:
-    return {"ok": True, "stats": await db.get_dashboard_stats()}
+    return {"ok": True}
 
 
 # ─── Bootstrap & User ────────────────────────────────
@@ -101,44 +106,43 @@ async def healthcheck() -> Dict[str, Any]:
 @app.get("/api/bootstrap")
 async def bootstrap_api(request: Request) -> JSONResponse:
     user = await get_telegram_user(request)
-    user_data = await db.get_user(user["id"])
-    prizes = await db.get_prizes(user["id"], 100)
-    free_used = await db.has_used_free(user["id"])
+    uid = user["id"]
+    user_data = await db.get_user(uid)
+    prizes = await db.get_prizes(uid, 100)
+    free_used = await db.has_used_free(uid)
     flags = await runtime_state.snapshot()
     spin_cost = await runtime_state.get_spin_cost()
-    leaderboard = await db.leaderboard(8)
-    history = await db.get_global_history(12)
 
     return no_store_json({
         "user": user_data,
         "prizes": prizes,
         "free_used": free_used,
-        "is_owner": user["id"] == OWNER_ID,
+        "is_owner": uid == OWNER_ID,
         "config": {
             "spin_cost": spin_cost,
             "channel_url": CHANNEL_URL,
-            "channel_id": CHANNEL_ID,
         },
         "prizes_catalog": PRIZES,
         "flags": flags,
-        "leaderboard": leaderboard,
-        "history": history,
+        "leaderboard": await db.leaderboard(8),
+        "history": await db.get_global_history(12),
     })
 
 
 @app.get("/api/user")
 async def get_user_api(request: Request) -> JSONResponse:
     user = await get_telegram_user(request)
-    data = await db.get_user(user["id"])
-    prizes = await db.get_prizes(user["id"], 100)
-    free_used = await db.has_used_free(user["id"])
+    uid = user["id"]
+    data = await db.get_user(uid)
+    prizes = await db.get_prizes(uid, 100)
+    free_used = await db.has_used_free(uid)
     spin_cost = await runtime_state.get_spin_cost()
 
     return no_store_json({
         "user": data,
         "prizes": prizes,
         "free_used": free_used,
-        "is_owner": user["id"] == OWNER_ID,
+        "is_owner": uid == OWNER_ID,
         "config": {"spin_cost": spin_cost},
     })
 
@@ -147,11 +151,9 @@ async def get_user_api(request: Request) -> JSONResponse:
 
 @app.post("/api/topup")
 async def topup_api(request: Request) -> Dict[str, Any]:
-    """Create Telegram invoice to top up internal balance."""
     user = await get_telegram_user(request)
     body = await request.json()
     amount = int(body.get("amount", 0))
-
     if amount < 1 or amount > 10000:
         raise HTTPException(status_code=400, detail="Invalid amount (1-10000)")
 
@@ -162,15 +164,12 @@ async def topup_api(request: Request) -> Dict[str, Any]:
         "currency": "XTR",
         "prices": [{"label": "Звёзды", "amount": amount}],
     }
-
     async with aiohttp.ClientSession() as session:
         async with session.post(f"https://api.telegram.org/bot{TOKEN}/createInvoiceLink", json=payload) as resp:
             data = await resp.json()
-
     if not data.get("ok"):
         log.error("Topup invoice failed: %s", data.get("description"))
         raise HTTPException(status_code=500, detail="Invoice creation failed")
-
     return {"invoice_link": data["result"]}
 
 
@@ -178,20 +177,14 @@ async def topup_api(request: Request) -> Dict[str, Any]:
 
 @app.post("/api/spin")
 async def spin_api(request: Request) -> Dict[str, Any]:
-    """Deduct from balance and spin. Instant — no invoice needed."""
     user = await get_telegram_user(request)
     uid = user["id"]
     spin_cost = await runtime_state.get_spin_cost()
 
-    try:
-        member = await bot_instance.get_chat_member(CHANNEL_ID, uid)
-        subscribed = member.status in ("member", "administrator", "creator")
-    except Exception as exc:
-        log.exception("Sub check failed for %s: %s", uid, exc)
-        subscribed = False
-
-    if not subscribed:
-        return {"error": "not_subscribed", "channel_url": CHANNEL_URL}
+    # Subscription check (owner bypasses)
+    if uid != OWNER_ID:
+        if not await check_subscription(uid):
+            return {"error": "not_subscribed", "channel_url": CHANNEL_URL}
 
     if spin_cost > 0:
         ok = await db.deduct_balance(uid, spin_cost)
@@ -200,16 +193,14 @@ async def spin_api(request: Request) -> Dict[str, Any]:
             return {"error": "insufficient_balance", "balance": balance, "spin_cost": spin_cost}
 
     from bot import pick_prize
-
     winner = pick_prize()
     prize_id = await db.record_spin(uid, winner, is_demo=False, is_free=False, stars=spin_cost)
-    if prize_id is not None:
-        winner["id"] = prize_id
-    log.info("Spin | uid=%s prize=%s cost=%s", uid, winner["key"], spin_cost)
-    return {"winner": winner}
+    balance = await db.get_balance(uid)
+    log.info("Spin | uid=%s prize=%s cost=%s bal=%s", uid, winner["key"], spin_cost, balance)
+    return {"winner": winner, "prize_id": prize_id, "balance": balance}
 
 
-# ─── Demo Spin (owner only) ─────────────────────────
+# ─── Demo Spin (owner) ──────────────────────────────
 
 @app.post("/api/demo_spin")
 async def demo_spin_api(request: Request) -> Dict[str, Any]:
@@ -219,15 +210,10 @@ async def demo_spin_api(request: Request) -> Dict[str, Any]:
     flags = await runtime_state.snapshot()
     if not flags["demo"]:
         raise HTTPException(status_code=403, detail="Demo disabled")
-
     from bot import pick_prize
-
     winner = pick_prize()
     prize_id = await db.record_spin(user["id"], winner, is_demo=True, is_free=False)
-    if prize_id is not None:
-        winner["id"] = prize_id
-    log.info("Demo spin | uid=%s prize=%s", user["id"], winner["key"])
-    return {"winner": winner, "is_demo": True}
+    return {"winner": winner, "prize_id": prize_id, "is_demo": True}
 
 
 # ─── Free Spin ───────────────────────────────────────
@@ -236,63 +222,43 @@ async def demo_spin_api(request: Request) -> Dict[str, Any]:
 async def free_spin_api(request: Request) -> Dict[str, Any]:
     user = await get_telegram_user(request)
     uid = user["id"]
-
     if await db.has_used_free(uid):
         return {"error": "already_used"}
-
-    try:
-        member = await bot_instance.get_chat_member(CHANNEL_ID, uid)
-        subscribed = member.status in ("member", "administrator", "creator")
-    except Exception as exc:
-        log.exception("Sub check failed for %s: %s", uid, exc)
-        subscribed = False
-
-    if not subscribed:
+    if not await check_subscription(uid):
         return {"error": "not_subscribed", "channel_url": CHANNEL_URL}
-
     from bot import pick_prize
-
     winner = pick_prize()
     await db.mark_free_used(uid)
     prize_id = await db.record_spin(uid, winner, is_demo=False, is_free=True)
-    if prize_id is not None:
-        winner["id"] = prize_id
-    log.info("Free spin | uid=%s prize=%s", uid, winner["key"])
-    return {"winner": winner, "free_used": True}
+    return {"winner": winner, "prize_id": prize_id, "free_used": True}
 
 
 # ─── Sell Prize ──────────────────────────────────────
 
 @app.post("/api/sell")
 async def sell_prize_api(request: Request) -> Dict[str, Any]:
-    """Sell an inventory prize for stars (credited to balance)."""
     user = await get_telegram_user(request)
     body = await request.json()
     prize_id = int(body.get("prize_id", 0))
     prize_key = body.get("prize_key", "")
-
     prize_info = PRIZES_BY_KEY.get(prize_key)
     if not prize_info or prize_info["type"] == "nothing":
-        raise HTTPException(status_code=400, detail="Invalid prize")
-
+        raise HTTPException(status_code=400, detail="Cannot sell")
     sell_value = prize_info.get("sell_value", 0)
     if sell_value <= 0:
-        raise HTTPException(status_code=400, detail="Cannot sell this prize")
-
+        raise HTTPException(status_code=400, detail="No sell value")
     ok = await db.sell_prize(user["id"], prize_id, sell_value)
     if not ok:
-        raise HTTPException(status_code=400, detail="Prize not found or already sold")
-
+        raise HTTPException(status_code=400, detail="Not found or already sold")
     balance = await db.get_balance(user["id"])
-    log.info("Sell | uid=%s prize_id=%s key=%s +%s⭐ bal=%s", user["id"], prize_id, prize_key, sell_value, balance)
+    log.info("Sell | uid=%s pid=%s +%s⭐ bal=%s", user["id"], prize_id, sell_value, balance)
     return {"ok": True, "sell_value": sell_value, "balance": balance}
 
 
-# ─── Legacy endpoints ────────────────────────────────
+# ─── Legacy ──────────────────────────────────────────
 
 @app.post("/api/create_invoice")
 async def create_invoice_api(request: Request) -> Dict[str, Any]:
-    """Legacy per-spin invoice. Kept for backward compat."""
     user = await get_telegram_user(request)
     spin_cost = await runtime_state.get_spin_cost()
     payload = {
@@ -302,11 +268,9 @@ async def create_invoice_api(request: Request) -> Dict[str, Any]:
         "currency": "XTR",
         "prices": [{"label": "Прокрутка", "amount": spin_cost}],
     }
-
     async with aiohttp.ClientSession() as session:
         async with session.post(f"https://api.telegram.org/bot{TOKEN}/createInvoiceLink", json=payload) as resp:
             data = await resp.json()
-
     if not data.get("ok"):
         raise HTTPException(status_code=500, detail="Invoice failed")
     return {"invoice_link": data["result"]}
@@ -318,8 +282,6 @@ async def get_spin_result_api(request: Request) -> JSONResponse:
     result = await db.get_spin_result(user["id"])
     return no_store_json({"result": result})
 
-
-# ─── Lists ───────────────────────────────────────────
 
 @app.get("/api/prizes_list")
 async def get_prizes_list_api() -> Dict[str, Any]:
@@ -346,7 +308,6 @@ async def live_updates_api() -> StreamingResponse:
             payload = json.dumps({
                 "history": await db.get_global_history(10),
                 "leaderboard": await db.leaderboard(8),
-                "stats": await db.get_dashboard_stats(),
             }, ensure_ascii=False)
             if payload != prev:
                 yield f"event: snapshot\ndata: {payload}\n\n"
@@ -354,7 +315,6 @@ async def live_updates_api() -> StreamingResponse:
             else:
                 yield "event: ping\ndata: {}\n\n"
             await asyncio.sleep(5)
-
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
@@ -406,39 +366,41 @@ async def update_weights_api(request: Request) -> Dict[str, Any]:
 
 @app.post("/api/admin/spin_cost")
 async def set_spin_cost_api(request: Request) -> Dict[str, Any]:
-    """Owner can set spin cost to any value (0 = free spins for testing)."""
     user = await get_telegram_user(request)
     if user["id"] != OWNER_ID:
         raise HTTPException(status_code=403, detail="Forbidden")
     body = await request.json()
     cost = int(body.get("cost", -1))
     if cost < 0:
-        raise HTTPException(status_code=400, detail="Cost must be >= 0")
+        raise HTTPException(status_code=400, detail="Cost >= 0")
     new_cost = await runtime_state.set_spin_cost(cost)
-    log.info("Spin cost changed to %s by owner", new_cost)
+    log.info("Spin cost → %s", new_cost)
     return {"ok": True, "spin_cost": new_cost}
 
 
-@app.post("/api/admin/edit_balance")
-async def edit_user_balance_api(request: Request) -> Dict[str, Any]:
-    """Owner can set any user's balance."""
+@app.post("/api/admin/set_balance")
+async def set_balance_api(request: Request) -> Dict[str, Any]:
+    """Owner can add/remove stars for any user."""
     user = await get_telegram_user(request)
     if user["id"] != OWNER_ID:
         raise HTTPException(status_code=403, detail="Forbidden")
     body = await request.json()
     target_uid = int(body.get("user_id", 0))
-    amount = int(body.get("amount", -1))
-    
-    if target_uid <= 0 or amount < 0:
-        raise HTTPException(status_code=400, detail="Invalid target UID or amount")
-        
-    target_user = await db.get_user(target_uid)
-    if not target_user:
+    delta = int(body.get("delta", 0))
+    if target_uid <= 0:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+    target = await db.get_user(target_uid)
+    if not target:
         raise HTTPException(status_code=404, detail="User not found")
-        
-    ok = await db.set_user_balance(target_uid, amount)
-    log.info("Admin edited balance | target=%s new_balance=%s admin=%s", target_uid, amount, user["id"])
-    return {"ok": ok, "user_id": target_uid, "new_balance": amount}
+    if delta > 0:
+        new_bal = await db.add_balance(target_uid, delta)
+    elif delta < 0:
+        ok = await db.deduct_balance(target_uid, abs(delta))
+        new_bal = await db.get_balance(target_uid) if ok else target.get("balance", 0)
+    else:
+        new_bal = target.get("balance", 0)
+    log.info("Admin set_balance | target=%s delta=%s new=%s", target_uid, delta, new_bal)
+    return {"ok": True, "user_id": target_uid, "balance": new_bal}
 
 
 # ─── Static files ────────────────────────────────────

@@ -15,7 +15,7 @@ export function useAppLogic() {
 
   const refreshUser = useCallback(async () => {
     try {
-      const data = await api<Pick<BootstrapResponse, "user" | "prizes" | "free_used" | "is_owner">>("user");
+      const data = await api<Pick<BootstrapResponse, "user" | "prizes" | "free_used" | "is_owner" | "config">>("user");
       setBoot((current) => current ? { ...current, ...data } : current);
     } catch (e) {
       console.error(e);

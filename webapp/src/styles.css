@@ -154,13 +154,12 @@ body {
 /* ── Reel cards ────────────────────────────────────── */
 
 .reel-card {
-  width: 88px;
+  width: 88px;      /* FIXED width, not min-width */
   height: 106px;
-  margin: 0 4px;
+  margin: 0 4px;    /* step = 88 + 8 = 96 */
   background: var(--s2);
   border: 1px solid var(--w08);
   border-radius: var(--r);
-  box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -274,159 +273,134 @@ body {
    SPIN PAGE
    ═══════════════════════════════════════════════════════ */
 
-.spin-header {
+/* Top bar: name + balance */
+.spin-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: rgba(20, 20, 31, 0.8);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--w08);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  margin-bottom: 8px;
 }
 
-.spin-prof {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.spin-ava {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  background: var(--s3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--w60);
-  object-fit: cover;
-  border: 1px solid var(--w15);
-}
-
-.spin-name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.spin-bal {
+.spin-bar-left {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 184, 0, 0.1);
-  color: #ffb800;
-  padding: 6px 10px 6px 14px;
-  border-radius: 100px;
+}
+
+.spin-bar-name {
   font-size: 15px;
+  font-weight: 700;
+}
+
+.spin-bar-bal {
+  font-size: 14px;
   font-weight: 800;
-  cursor: pointer;
-  border: 1px solid rgba(255, 184, 0, 0.2);
-}
-
-.spin-bal-add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background: #ffb800;
-  color: #000;
-  font-size: 16px;
-  line-height: 1;
-  font-weight: 800;
-}
-
-.spin-card {
-  padding: 16px 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.spin-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 100%;
-  background: radial-gradient(circle at 50% 0%, rgba(255,184,0,0.05) 0%, transparent 60%);
-  pointer-events: none;
-}
-
-.spin-actions {
-  padding: 0 16px;
-}
-
-/* ── Feed (horizontal marquee) ─────────────────────── */
-
-.feed-h-wrapper {
-  overflow: hidden;
+  color: var(--w);
   background: var(--s2);
+  border: 1px solid var(--w15);
+  border-radius: 20px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: 0.15s;
+}
+
+.spin-bar-bal:active { background: var(--s3); }
+
+/* Horizontal ticker — always visible */
+.ticker-wrap {
+  margin: 0 -14px 8px;
+  padding: 6px 14px;
+  overflow-x: auto;
   border-bottom: 1px solid var(--w04);
-  padding: 8px 0;
+}
+
+.ticker-wrap::-webkit-scrollbar { display: none; }
+
+.ticker {
+  display: flex;
+  gap: 12px;
   white-space: nowrap;
+}
+
+.ticker-item {
   display: flex;
-}
-
-.feed-h-track {
-  display: inline-flex;
-  gap: 24px;
-  padding-left: 100%;
-  animation: marquee 25s linear infinite;
-}
-
-.feed-h-item {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-}
-
-.feed-h-txt {
+  gap: 4px;
   font-size: 12px;
-  color: var(--w35);
-}
-
-.feed-h-txt b {
-  color: var(--w80);
-  font-weight: 600;
-}
-
-@keyframes marquee {
-  0%   { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(-100%, 0, 0); }
-}
-
-.feed-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--w04);
-  animation: feedIn 0.2s var(--ease) both;
-}
-
-.feed-row:last-child { border-bottom: none; }
-
-@keyframes feedIn {
-  from { opacity: 0; transform: translateX(-4px); }
-  to   { opacity: 1; transform: none; }
-}
-
-.feed-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--w15);
+  color: var(--w60);
   flex-shrink: 0;
 }
 
-.feed-user {
-  flex: 1; font-size: 13px; font-weight: 600;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.ticker-name {
+  font-weight: 600;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.feed-prize { font-size: 12px; color: var(--w35); flex-shrink: 0; }
+/* ── Topup sheet ─────────────────────────────── */
+
+.sheet-title {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.sheet-desc {
+  font-size: 12px;
+  color: var(--w35);
+  margin: 0 0 14px;
+}
+
+.topup-grid {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.topup-btn {
+  flex: 1;
+  min-width: 56px;
+  padding: 10px 6px;
+  background: var(--s2);
+  border: 1px solid var(--w08);
+  border-radius: var(--r);
+  color: var(--w60);
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.12s;
+}
+
+.topup-btn.on {
+  border-color: var(--w35);
+  color: var(--w);
+  background: var(--s3);
+}
+
+.topup-btn:active { background: var(--s3); }
+
+.topup-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.topup-input {
+  flex: 1;
+  width: 100%;
+}
+
+.topup-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--w35);
+}
 
 /* ═══════════════════════════════════════════════════════
    PROFILE PAGE
@@ -518,31 +492,12 @@ body {
 
 .prof-meta {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.tag {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: var(--w08);
-  padding: 4px 10px;
-  border-radius: 100px;
+  gap: 8px;
+  margin-top: 12px;
   font-size: 11px;
+  color: var(--w35);
   font-weight: 600;
-  color: var(--w60);
-}
-
-.tag-live {
-  border: 1px solid var(--w15);
-}
-
-.tag-on {
-  color: #000;
-  background: var(--w80);
 }
 
 .dot-live {
