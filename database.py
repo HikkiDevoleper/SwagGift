@@ -305,13 +305,10 @@ class Database:
         async with self._connection() as db:
             async with db.execute(
                 """
-                SELECT p.prize_key, p.prize_name, p.rarity, p.won_at,
-                       p.user_id,
-                       u.first_name, u.username
+                SELECT p.*, u.first_name, u.username
                 FROM prizes p
                 JOIN users u ON u.user_id = p.user_id
                 WHERE p.is_demo = 0
-                  AND COALESCE(p.status,'active') != 'sold'
                 ORDER BY p.won_at DESC
                 LIMIT ?
                 """,
