@@ -29,7 +29,7 @@ export const App: React.FC = () => {
   const spinRef = useRef(false);
   const tgPhoto = (tg?.initDataUnsafe?.user as any)?.photo_url || null;
 
-  /* ── SSE ─────────────────────────── */
+  /* ── SSE — always live, never blocked ── */
   useEffect(() => {
     if (!boot) return;
     let es: EventSource;
@@ -40,9 +40,11 @@ export const App: React.FC = () => {
         try {
           const d = JSON.parse(ev.data);
           setLiveConnected(true);
-          if (!spinRef.current) {
-            setBoot(p => p ? { ...p, history: d.history ?? p.history, leaderboard: d.leaderboard ?? p.leaderboard } : p);
-          }
+          setBoot(p => p ? {
+            ...p,
+            history: d.history ?? p.history,
+            leaderboard: d.leaderboard ?? p.leaderboard,
+          } : p);
         } catch {}
       });
       es.onerror = () => { setLiveConnected(false); es.close(); retry = setTimeout(connect, 5000); };
@@ -51,12 +53,12 @@ export const App: React.FC = () => {
     return () => { es?.close(); clearTimeout(retry); };
   }, [!!boot]);
 
-  /* ── Guards ──────────────────────── */
-  if (!boot) return <div className="app"><div className="loading">Загрузка…</div></div>;
+  /* ── Guards ── */
+  if (!boot) return <div className="app"><div className="loading"><div className="loader" /><p>Загрузка…</p></div></div>;
   if (boot.flags.maint && !boot.is_owner) {
     return (<div className="app"><div className="maint">
-      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-      <h1>Технические работы</h1><p>Swag Gift временно недоступен.</p>
+      <div className="maint-icon">⏳</div>
+      <h1>Технические работы</h1><p>Swag Gift временно недоступен</p>
     </div></div>);
   }
 
@@ -64,7 +66,7 @@ export const App: React.FC = () => {
   const balance = boot.user.balance || 0;
   const cost = boot.config.spin_cost;
 
-  /* ── Handlers ────────────────────── */
+  /* ── Handlers ── */
   const doSpin = async () => {
     if (spinning) return;
     if (isDemo) {
@@ -75,23 +77,16 @@ export const App: React.FC = () => {
       return;
     }
     try {
-      const r = await api<{ winner?: Prize; prize_id?: number; balance?: number; error?: string; spin_cost?: number; channel_url?: string }>('spin', 'POST');
+      const r = await api<{ winner?: Prize; prize_id?: number; balance?: number; error?: string; spin_cost?: number }>('spin', 'POST');
       if (r.error === 'insufficient_balance') {
         notify(`Нужно ${r.spin_cost} ⭐, у вас ${r.balance}`);
-        return;
-      }
-      if (r.error === 'not_subscribed') {
-        tg?.showConfirm('Подпишитесь на @SwagGiftChannel', (ok: boolean) => {
-          if (ok) tg?.openLink(r.channel_url || boot.config.channel_url);
-        });
+        setShowTopup(true);
         return;
       }
       if (r.winner) {
         setWinner(r.winner);
         setWonPrizeId(r.prize_id || 0);
-        if (typeof r.balance === 'number') {
-          setBoot(p => p ? { ...p, user: { ...p.user, balance: r.balance! } } : p);
-        }
+        if (typeof r.balance === 'number') setBoot(p => p ? { ...p, user: { ...p.user, balance: r.balance! } } : p);
         spinRef.current = true;
         setSpinning(true);
       }
@@ -104,7 +99,7 @@ export const App: React.FC = () => {
       const r = await api<{ winner?: Prize; prize_id?: number; error?: string; channel_url?: string }>('free_spin', 'POST');
       if (r.winner) { setWinner(r.winner); setWonPrizeId(r.prize_id || 0); spinRef.current = true; setSpinning(true); }
       else if (r.error === 'not_subscribed') {
-        tg?.showConfirm('Подпишитесь на @SwagGiftChannel', (ok: boolean) => {
+        tg?.showConfirm('Подпишитесь на @SwagGiftChannel для бесплатного спина', (ok: boolean) => {
           if (ok) tg?.openLink(r.channel_url || boot.config.channel_url);
         });
       } else if (r.error === 'already_used') { notify('Шанс использован'); refreshUser(); }
@@ -115,7 +110,7 @@ export const App: React.FC = () => {
     try {
       const r = await api<{ invoice_link: string }>('topup', 'POST', { amount });
       tg?.openInvoice(r.invoice_link, (status: string) => {
-        if (status === 'paid') { notify(`+${amount} ⭐ на баланс`); refreshUser(); }
+        if (status === 'paid') { notify(`+${amount} ⭐`); refreshUser(); }
       });
     } catch (e: any) { notify(e.message || 'Ошибка'); }
     setShowTopup(false);
@@ -124,11 +119,14 @@ export const App: React.FC = () => {
   const doSell = async (prizeId: number, prizeKey: string) => {
     try {
       const r = await api<{ ok: boolean; sell_value: number; balance: number }>('sell', 'POST', { prize_id: prizeId, prize_key: prizeKey });
-      if (r.ok) {
-        notify(`+${r.sell_value} ⭐`);
-        setBoot(p => p ? { ...p, user: { ...p.user, balance: r.balance } } : p);
-        refreshUser();
-      }
+      if (r.ok) { notify(`+${r.sell_value} ⭐`); setBoot(p => p ? { ...p, user: { ...p.user, balance: r.balance } } : p); refreshUser(); }
+    } catch (e: any) { notify(e.message || 'Ошибка'); }
+  };
+
+  const doWithdraw = async (prizeId: number) => {
+    try {
+      const r = await api<{ ok: boolean }>('withdraw', 'POST', { prize_id: prizeId });
+      if (r.ok) { notify('Подарок будет выдан в ближайшее время'); refreshUser(); }
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
@@ -140,7 +138,7 @@ export const App: React.FC = () => {
     refreshUser();
   };
 
-  const claimToInventory = () => { setShowRes(false); };
+  const claimToInventory = () => setShowRes(false);
 
   const sellWonPrize = async () => {
     if (!winner || wonPrizeId <= 0) { notify('Ошибка'); return; }
@@ -171,71 +169,73 @@ export const App: React.FC = () => {
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
-  /* ── Spin Page ───────────────────── */
+  /* ── Spin Page ── */
   const SpinPage = () => (
-    <div className="page" key="spin">
-      {/* Header: balance + name */}
+    <div className="page fade-in" key="spin">
+      {/* Top bar */}
       <div className="spin-bar">
         <div className="spin-bar-left">
+          <div className="spin-bar-ava">
+            {tgPhoto ? <img src={tgPhoto} alt="" /> : initialsOf(boot.user)}
+          </div>
           <span className="spin-bar-name">{boot.user.first_name}</span>
           {isDemo && <span className="tag">Demo</span>}
         </div>
-        <button className="spin-bar-bal" onClick={() => setShowTopup(true)}>
-          {balance} ⭐
-        </button>
+        <button className="spin-bar-bal" onClick={() => setShowTopup(true)}>{balance} ⭐</button>
       </div>
 
-      {/* Horizontal history ticker */}
+      {/* Live history bubble ticker */}
       {boot.history.length > 0 && (
         <div className="ticker-wrap">
           <div className="ticker">
-            {boot.history.slice(0, 8).map((r, i) => (
-              <span key={i} className="ticker-item">
-                {boot.prizes_catalog.find(p => p.key === r.prize_key)?.emoji || '🎁'}
-                <span className="ticker-name">{r.first_name || 'Игрок'}</span>
-              </span>
-            ))}
+            {boot.history.slice(0, 10).map((r, i) => {
+              const cat = boot.prizes_catalog.find(p => p.key === r.prize_key);
+              return (
+                <div key={i} className="bubble">
+                  <span className="bubble-emoji">{cat?.emoji || '🎁'}</span>
+                  <span className="bubble-name">{r.first_name || r.username || 'Игрок'}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Roulette */}
-      <div className="card">
+      {/* Roulette card */}
+      <div className="card roulette-card">
         <Roulette prizes={boot.prizes_catalog} isSpinning={spinning} winner={winner} onSpinEnd={onSpinEnd} />
-        <button className="btn btn-w" onClick={doSpin} disabled={spinning}>
-          {spinning ? 'Крутим…' : isDemo ? 'Демо-спин' : cost > 0 ? `Крутить — ${cost} ⭐` : 'Крутить'}
+        <button className="btn btn-w spin-btn" onClick={doSpin} disabled={spinning}>
+          {spinning ? '🎰 Крутим…' : isDemo ? '🎲 Демо' : cost > 0 ? `Крутить — ${cost} ⭐` : '🎲 Крутить'}
         </button>
         {!boot.free_used && (
-          <button className="btn btn-outline btn-mt" onClick={doFree} disabled={spinning}>
-            Бесплатный шанс
-          </button>
+          <button className="btn btn-outline btn-mt" onClick={doFree} disabled={spinning}>Бесплатный шанс</button>
         )}
       </div>
     </div>
   );
 
-  /* ── Inventory ───────────────────── */
+  /* ── Inventory ── */
   const InvPage = () => (
-    <div className="page" key="inv">
+    <div className="page fade-in" key="inv">
       <h1 className="pg-title">Мои призы</h1>
       {boot.prizes.length === 0
-        ? <div className="empty">Ещё нет призов</div>
+        ? <div className="empty"><div className="empty-icon">📦</div><p>Ещё нет призов</p></div>
         : <div className="inv-grid">
             {boot.prizes.map((item, i) => {
               const cat = boot.prizes_catalog.find(p => p.key === item.key);
               const sv = cat?.sell_value || 0;
+              const isWithdrawing = item.status === 'withdrawing';
               return (
-                <div key={item.id || i} className="inv-item">
+                <div key={item.id || i} className={cn('inv-item', isWithdrawing && 'withdrawing')}>
                   <span className="inv-emoji">{cat?.emoji || '🎁'}</span>
                   <span className="inv-name">{item.name}</span>
                   <span className="inv-rarity">{item.rarity}</span>
-                  <span className="inv-date">{formatDate(item.date)}</span>
-                  {item.key !== 'nothing' && (
+                  {isWithdrawing ? (
+                    <span className="inv-status">⏳ Вывод…</span>
+                  ) : item.key !== 'nothing' && (
                     <div className="inv-btns">
-                      <button className="inv-btn" onClick={() => notify('Подарок будет выдан в ближайшее время')}>
-                        Вывести
-                      </button>
-                      <button className="inv-btn" onClick={() => doSell(item.id, item.key)}>
+                      <button className="inv-btn" onClick={() => doWithdraw(item.id)}>Вывести</button>
+                      <button className="inv-btn inv-btn-sell" onClick={() => doSell(item.id, item.key)}>
                         {sv > 0 ? `${sv} ⭐` : 'Продать'}
                       </button>
                     </div>
@@ -248,49 +248,63 @@ export const App: React.FC = () => {
     </div>
   );
 
-  /* ── Leaderboard ─────────────────── */
+  /* ── Leaderboard ── */
   const TopPage = () => (
-    <div className="page" key="top">
+    <div className="page fade-in" key="top">
       <h1 className="pg-title">Рейтинг</h1>
       {boot.leaderboard.length === 0
-        ? <div className="empty">Пусто</div>
-        : boot.leaderboard.map((r, i) => (
-            <div key={i} className="lb-row">
-              <span className={cn('lb-n', i === 0 && 'g1', i === 1 && 'g2', i === 2 && 'g3')}>{i + 1}</span>
-              <div className="lb-info">
-                <div className="lb-name">{r.first_name || r.username || 'Игрок'}</div>
-                <div className="lb-sub">{r.spins} спинов · {r.stars_spent} ⭐</div>
+        ? <div className="empty"><p>Пусто</p></div>
+        : <div className="lb-list">
+            {boot.leaderboard.map((r, i) => (
+              <div key={i} className="lb-row">
+                <span className={cn('lb-medal', i === 0 && 'gold', i === 1 && 'silver', i === 2 && 'bronze')}>
+                  {i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}
+                </span>
+                <div className="lb-ava">{initialsOf(r)}</div>
+                <div className="lb-info">
+                  <div className="lb-name">{r.first_name || r.username || 'Игрок'}</div>
+                  <div className="lb-sub">{r.spins} спинов · {r.stars_spent} ⭐</div>
+                </div>
+                <div className="lb-wins">{r.wins} 🏆</div>
               </div>
-              <span className="lb-wins">{r.wins}</span>
-            </div>
-          ))
+            ))}
+          </div>
       }
     </div>
   );
 
-  /* ── Profile ─────────────────────── */
+  /* ── Profile ── */
   const ProfPage = () => {
     const u = boot.user;
     return (
-      <div className="page" key="prof">
-        <div className="prof">
-          <div className="prof-ava">
-            {tgPhoto ? <img src={tgPhoto} alt="" /> : initialsOf(u)}
-          </div>
+      <div className="page fade-in" key="prof">
+        <div className="prof-card">
+          <div className="prof-ava-lg">{tgPhoto ? <img src={tgPhoto} alt="" /> : initialsOf(u)}</div>
           <h2 className="prof-name">{u.first_name}</h2>
           {u.username && <p className="prof-handle">@{u.username}</p>}
           <p className="prof-rank">{rankTitle(u.wins)}</p>
-          <div className="prof-grid">
-            <div className="prof-cell"><span className="prof-val">{balance}</span><span className="prof-lbl">Баланс ⭐</span></div>
-            <div className="prof-cell"><span className="prof-val">{u.wins}</span><span className="prof-lbl">Побед</span></div>
-            <div className="prof-cell"><span className="prof-val">{u.spins}</span><span className="prof-lbl">Спинов</span></div>
+
+          <div className="prof-stats">
+            <div className="prof-stat">
+              <span className="prof-stat-val">{balance}</span>
+              <span className="prof-stat-lbl">Баланс ⭐</span>
+            </div>
+            <div className="prof-stat-sep" />
+            <div className="prof-stat">
+              <span className="prof-stat-val">{u.wins}</span>
+              <span className="prof-stat-lbl">Побед</span>
+            </div>
+            <div className="prof-stat-sep" />
+            <div className="prof-stat">
+              <span className="prof-stat-val">{u.spins}</span>
+              <span className="prof-stat-lbl">Спинов</span>
+            </div>
           </div>
         </div>
-        <button className="btn btn-w" onClick={() => setShowTopup(true)}>
-          Пополнить баланс
-        </button>
+
+        <button className="btn btn-w" onClick={() => setShowTopup(true)}>Пополнить баланс</button>
         {boot.is_owner && (
-          <button className="btn btn-outline btn-mt" onClick={() => setShowAdmin(true)}>Панель управления</button>
+          <button className="btn btn-outline btn-mt" onClick={() => setShowAdmin(true)}>⚙️ Управление</button>
         )}
       </div>
     );
@@ -319,14 +333,15 @@ export const App: React.FC = () => {
         ))}
       </nav>
 
-      {/* Win result */}
+      {/* Win result sheet */}
       {showRes && winner && (
         <>
           <div className="overlay" onClick={claimToInventory} />
-          <div className="sheet">
+          <div className="sheet win-sheet">
             <div className="sheet-bar" />
             <div className="res">
-              <span className="res-emoji">{winner.emoji}</span>
+              <div className="res-glow" />
+              <span className="res-emoji bounce">{winner.emoji}</span>
               <h2 className="res-title">{winner.name}</h2>
               <p className="res-sub">{winner.rarity}</p>
               <div className="btn-row">
@@ -349,41 +364,29 @@ export const App: React.FC = () => {
             <h2 className="sheet-title">Пополнение баланса</h2>
             <p className="sheet-desc">Текущий баланс: {balance} ⭐</p>
             <div className="topup-grid">
-              {[25, 50, 100, 200, 500].map(a => (
-                <button key={a} className={cn('topup-btn', topupAmt === a && 'on')} onClick={() => setTopupAmt(a)}>
-                  {a} ⭐
-                </button>
+              {[25, 50, 100, 250, 500].map(a => (
+                <button key={a} className={cn('topup-btn', topupAmt === a && 'on')} onClick={() => setTopupAmt(a)}>{a} ⭐</button>
               ))}
             </div>
             <div className="topup-custom">
-              <input
-                className="wt-input topup-input"
-                type="number" min={1} max={10000}
-                value={topupAmt}
-                onChange={e => setTopupAmt(Math.max(1, parseInt(e.target.value) || 1))}
-                aria-label="Сумма пополнения"
-              />
+              <input className="wt-input topup-input" type="number" min={1} max={10000} value={topupAmt}
+                onChange={e => setTopupAmt(Math.max(1, parseInt(e.target.value) || 1))} aria-label="Сумма" />
               <span className="topup-label">⭐</span>
             </div>
-            <button className="btn btn-w" onClick={() => doTopup(topupAmt)}>
-              Пополнить {topupAmt} ⭐
-            </button>
+            <button className="btn btn-w" onClick={() => doTopup(topupAmt)}>Пополнить {topupAmt} ⭐</button>
           </div>
         </>
       )}
 
       {showAdmin && (
         <AdminSheet
-          flags={boot.flags} onToggle={toggleFlag}
-          onClose={() => setShowAdmin(false)}
-          spinCost={boot.config.spin_cost}
-          onSetSpinCost={setSpinCost}
-          prizes={boot.prizes_catalog}
-          onSaveWeights={saveWeights}
+          flags={boot.flags} onToggle={toggleFlag} onClose={() => setShowAdmin(false)}
+          spinCost={boot.config.spin_cost} onSetSpinCost={setSpinCost}
+          prizes={boot.prizes_catalog} onSaveWeights={saveWeights} onNotify={notify}
         />
       )}
 
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast show">{toast}</div>}
     </div>
   );
 };

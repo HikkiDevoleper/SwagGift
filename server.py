@@ -181,11 +181,6 @@ async def spin_api(request: Request) -> Dict[str, Any]:
     uid = user["id"]
     spin_cost = await runtime_state.get_spin_cost()
 
-    # Subscription check (owner bypasses)
-    if uid != OWNER_ID:
-        if not await check_subscription(uid):
-            return {"error": "not_subscribed", "channel_url": CHANNEL_URL}
-
     if spin_cost > 0:
         ok = await db.deduct_balance(uid, spin_cost)
         if not ok:
@@ -253,6 +248,21 @@ async def sell_prize_api(request: Request) -> Dict[str, Any]:
     balance = await db.get_balance(user["id"])
     log.info("Sell | uid=%s pid=%s +%s⭐ bal=%s", user["id"], prize_id, sell_value, balance)
     return {"ok": True, "sell_value": sell_value, "balance": balance}
+
+
+# ─── Withdraw Prize ──────────────────────────────────
+
+@app.post("/api/withdraw")
+async def withdraw_prize_api(request: Request) -> Dict[str, Any]:
+    """Mark prize as 'withdrawing' — gift will be sent via Telegram."""
+    user = await get_telegram_user(request)
+    body = await request.json()
+    prize_id = int(body.get("prize_id", 0))
+    ok = await db.withdraw_prize(user["id"], prize_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Not found or already withdrawn")
+    log.info("Withdraw | uid=%s pid=%s", user["id"], prize_id)
+    return {"ok": True, "status": "withdrawing"}
 
 
 # ─── Legacy ──────────────────────────────────────────

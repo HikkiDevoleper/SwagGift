@@ -31,6 +31,7 @@ export type InventoryItem = {
   demo: boolean;
   free: boolean;
   date: string;
+  status: 'active' | 'withdrawing' | 'sold';
 };
 
 export type LeaderboardRow = {

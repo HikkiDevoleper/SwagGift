@@ -182,6 +182,16 @@ class Database:
             await db.commit()
             return True
 
+    async def withdraw_prize(self, uid: int, prize_id: int) -> bool:
+        """Mark prize as 'withdrawing'."""
+        async with self._connection() as db:
+            cur = await db.execute(
+                "UPDATE prizes SET status = 'withdrawing' WHERE id = ? AND user_id = ? AND status = 'active'",
+                (prize_id, uid),
+            )
+            await db.commit()
+            return cur.rowcount > 0
+
     async def is_banned(self, uid: int) -> bool:
         user = await self.get_user(uid)
         return bool(user["is_banned"]) if user else False
@@ -270,7 +280,7 @@ class Database:
                 SELECT id, prize_key, prize_name, rarity, is_demo, is_free, won_at,
                        COALESCE(status, 'active') AS status
                 FROM prizes
-                WHERE user_id = ? AND COALESCE(status, 'active') = 'active'
+                WHERE user_id = ? AND COALESCE(status, 'active') IN ('active', 'withdrawing')
                 ORDER BY won_at DESC
                 LIMIT ?
                 """,
@@ -286,6 +296,7 @@ class Database:
                         "demo": bool(row["is_demo"]),
                         "free": bool(row["is_free"]),
                         "date": row["won_at"],
+                        "status": row["status"],
                     }
                     for row in rows
                 ]
