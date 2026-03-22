@@ -261,6 +261,14 @@ body {
 
 .btn-row .btn { flex: 1; }
 
+.btn-mt { margin-top: 6px; }
+
+.cost-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ═══════════════════════════════════════════════════════
    SPIN PAGE
    ═══════════════════════════════════════════════════════ */

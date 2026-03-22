@@ -2,79 +2,99 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-TOKEN = os.environ.get("BOT_TOKEN", "8706094547:AAHJSLk2YrdM75CyTYKzwgIzYaUz19cP-ZE")
-SPIN_COST = int(os.environ.get("SPIN_COST", 15))
-OWNER_ID = int(os.environ.get("OWNER_ID", 7969551121))
-OWNER_USERNAME = os.environ.get("OWNER_USERNAME", "fuckswagging")
-CHANNEL_ID = os.environ.get("CHANNEL_ID", "@cheatdurov")
+TOKEN = os.environ.get("BOT_TOKEN", "")
+OWNER_ID = int(os.environ.get("OWNER_ID", "0"))
+OWNER_USERNAME = os.environ.get("OWNER_USERNAME", "")
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "")
 CHANNEL_URL = os.environ.get("CHANNEL_URL", "https://t.me/cheatdurov")
-WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://swagginggift-production.up.railway.app/")
+WEBAPP_URL = os.environ.get("WEBAPP_URL", "")
 DB_PATH = Path(os.environ.get("DB_PATH", "swagging_gift.db"))
+PORT = int(os.environ.get("PORT", "8080"))
 
+DEFAULT_SPIN_COST = int(os.environ.get("SPIN_COST", "15"))
 BOT_START_TIME = datetime.now(timezone.utc)
 
+# ─── Prize Catalog ───────────────────────────────────
+# sell_value = how many ⭐ user gets when selling this prize
 PRIZES = [
+    {
+        "key": "heart",
+        "name": "Сердце",
+        "emoji": "❤️",
+        "rarity": "Обычный",
+        "weight": 22,
+        "type": "gift",
+        "sell_value": 15,
+        "gift_id": None,
+    },
+    {
+        "key": "bear",
+        "name": "Мишка",
+        "emoji": "🧸",
+        "rarity": "Обычный",
+        "weight": 20,
+        "type": "gift",
+        "sell_value": 15,
+        "gift_id": None,
+    },
+    {
+        "key": "gift",
+        "name": "Подарок",
+        "emoji": "🎁",
+        "rarity": "Редкий",
+        "weight": 15,
+        "type": "gift",
+        "sell_value": 25,
+        "gift_id": None,
+    },
     {
         "key": "rose",
         "name": "Роза",
         "emoji": "🌹",
-        "rarity": "Обычный",
-        "weight": 25,
+        "rarity": "Редкий",
+        "weight": 14,
         "type": "gift",
-        "gift_id": None,
-    },
-    {
-        "key": "bouquet",
-        "name": "Букет",
-        "emoji": "💐",
-        "rarity": "Обычный",
-        "weight": 18,
-        "type": "gift",
+        "sell_value": 25,
         "gift_id": None,
     },
     {
         "key": "cake",
         "name": "Торт",
         "emoji": "🎂",
-        "rarity": "Обычный",
-        "weight": 20,
-        "type": "gift",
-        "gift_id": None,
-    },
-    {
-        "key": "bear",
-        "name": "Плюшевый мишка",
-        "emoji": "🧸",
-        "rarity": "Редкий",
-        "weight": 12,
-        "type": "gift",
-        "gift_id": None,
-    },
-    {
-        "key": "heart",
-        "name": "Сердце",
-        "emoji": "❤️",
-        "rarity": "Редкий",
-        "weight": 10,
-        "type": "gift",
-        "gift_id": None,
-    },
-    {
-        "key": "trophy",
-        "name": "Трофей",
-        "emoji": "🏆",
         "rarity": "Эпический",
-        "weight": 5,
+        "weight": 8,
         "type": "gift",
+        "sell_value": 50,
         "gift_id": None,
     },
     {
-        "key": "gem",
-        "name": "Кристалл",
+        "key": "bouquet",
+        "name": "Букет",
+        "emoji": "💐",
+        "rarity": "Эпический",
+        "weight": 7,
+        "type": "gift",
+        "sell_value": 50,
+        "gift_id": None,
+    },
+    {
+        "key": "racket",
+        "name": "Ракетка",
+        "emoji": "🏸",
+        "rarity": "Эпический",
+        "weight": 6,
+        "type": "gift",
+        "sell_value": 50,
+        "gift_id": None,
+    },
+    {
+        "key": "diamond",
+        "name": "Бриллиант",
         "emoji": "💎",
         "rarity": "Легендарный",
         "weight": 2,
         "type": "gift",
+        "sell_value": 100,
         "gift_id": None,
     },
     {
@@ -84,6 +104,7 @@ PRIZES = [
         "rarity": "Промах",
         "weight": 35,
         "type": "nothing",
+        "sell_value": 0,
         "gift_id": None,
     },
 ]
@@ -93,10 +114,8 @@ TOTAL_WEIGHT = sum(prize["weight"] for prize in PRIZES)
 
 
 def update_weights(new_weights: dict[str, int]) -> None:
-    """Update prize weights at runtime from admin panel."""
     global TOTAL_WEIGHT
     for prize in PRIZES:
         if prize["key"] in new_weights:
             prize["weight"] = max(0, int(new_weights[prize["key"]]))
     TOTAL_WEIGHT = sum(prize["weight"] for prize in PRIZES)
-

@@ -100,7 +100,9 @@ class Database:
                     ("users", "is_banned", "INTEGER DEFAULT 0"),
                     ("users", "free_used", "INTEGER DEFAULT 0"),
                     ("users", "updated_at", f"TEXT NOT NULL DEFAULT '{utc_now_iso()}'"),
+                    ("users", "balance", "INTEGER DEFAULT 0"),
                     ("prizes", "is_free", "INTEGER DEFAULT 0"),
+                    ("prizes", "status", "TEXT DEFAULT 'active'"),
                 ]:
                     try:
                         await db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {dfn}")
@@ -132,7 +134,53 @@ class Database:
         async with self._connection() as db:
             async with db.execute("SELECT * FROM users WHERE user_id = ?", (uid,)) as cur:
                 row = await cur.fetchone()
-                return dict(row) if row else None
+                if not row:
+                    return None
+                d = dict(row)
+                if "balance" not in d:
+                    d["balance"] = 0
+                return d
+
+    async def get_balance(self, uid: int) -> int:
+        user = await self.get_user(uid)
+        return int(user.get("balance", 0)) if user else 0
+
+    async def add_balance(self, uid: int, amount: int) -> int:
+        """Add stars to user balance. Returns new balance."""
+        async with self._connection() as db:
+            await db.execute(
+                "UPDATE users SET balance = balance + ?, updated_at = ? WHERE user_id = ?",
+                (amount, utc_now_iso(), uid),
+            )
+            await db.commit()
+        return await self.get_balance(uid)
+
+    async def deduct_balance(self, uid: int, amount: int) -> bool:
+        """Deduct from balance. Returns False if insufficient."""
+        async with self._connection() as db:
+            cur = await db.execute(
+                "UPDATE users SET balance = balance - ?, updated_at = ? WHERE user_id = ? AND balance >= ?",
+                (amount, utc_now_iso(), uid, amount),
+            )
+            await db.commit()
+            return cur.rowcount > 0
+
+    async def sell_prize(self, uid: int, prize_id: int, sell_value: int) -> bool:
+        """Mark prize as sold, credit balance."""
+        async with self._connection() as db:
+            cur = await db.execute(
+                "UPDATE prizes SET status = 'sold' WHERE id = ? AND user_id = ? AND status = 'active'",
+                (prize_id, uid),
+            )
+            if cur.rowcount == 0:
+                await db.commit()
+                return False
+            await db.execute(
+                "UPDATE users SET balance = balance + ?, updated_at = ? WHERE user_id = ?",
+                (sell_value, utc_now_iso(), uid),
+            )
+            await db.commit()
+            return True
 
     async def is_banned(self, uid: int) -> bool:
         user = await self.get_user(uid)
@@ -215,9 +263,10 @@ class Database:
         async with self._connection() as db:
             async with db.execute(
                 """
-                SELECT prize_key, prize_name, rarity, is_demo, is_free, won_at
+                SELECT id, prize_key, prize_name, rarity, is_demo, is_free, won_at,
+                       COALESCE(status, 'active') AS status
                 FROM prizes
-                WHERE user_id = ?
+                WHERE user_id = ? AND COALESCE(status, 'active') = 'active'
                 ORDER BY won_at DESC
                 LIMIT ?
                 """,
@@ -226,6 +275,7 @@ class Database:
                 rows = await cur.fetchall()
                 return [
                     {
+                        "id": row["id"],
                         "key": row["prize_key"],
                         "name": row["prize_name"],
                         "rarity": row["rarity"],

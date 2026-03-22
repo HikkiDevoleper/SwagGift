@@ -7,6 +7,7 @@ export type Prize = {
   rarity: string;
   weight: number;
   type: "gift" | "nothing";
+  sell_value: number;
   gift_id?: string | null;
 };
 
@@ -17,10 +18,12 @@ export type User = {
   spins: number;
   wins: number;
   stars_spent: number;
+  balance: number;
   photo_url?: string | null;
 };
 
 export type InventoryItem = {
+  id: number;
   key: string;
   name: string;
   emoji?: string;

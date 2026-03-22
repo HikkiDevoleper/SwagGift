@@ -19,7 +19,7 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from config import BOT_START_TIME, CHANNEL_URL, DB_PATH, OWNER_ID, OWNER_USERNAME, PRIZES, SPIN_COST, TOKEN, WEBAPP_URL
+from config import BOT_START_TIME, CHANNEL_URL, DB_PATH, DEFAULT_SPIN_COST, OWNER_ID, OWNER_USERNAME, PRIZES, TOKEN, WEBAPP_URL
 from database import Database
 from runtime_state import runtime_state
 
@@ -360,11 +360,22 @@ async def pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
 async def on_paid(message: Message) -> None:
     user = message.from_user
     payment = message.successful_payment
+    payload_str = payment.invoice_payload or ""
+
+    await db.ensure_user(user.id, user.username or "", user.first_name or "")
+
+    # Detect topup payment: payload starts with "sg_topup_"
+    if payload_str.startswith("sg_topup_"):
+        amount = payment.total_amount
+        new_balance = await db.add_balance(user.id, amount)
+        log.info("Topup | uid=%s amount=%s new_balance=%s", user.id, amount, new_balance)
+        return
+
+    # Legacy spin payment
     flags = await get_runtime_flags()
     prize = pick_prize()
     is_demo = flags["demo"]
 
-    await db.ensure_user(user.id, user.username or "", user.first_name or "")
     await db.record_spin(
         user.id,
         prize,
@@ -386,11 +397,8 @@ async def on_paid(message: Message) -> None:
         log.info("Gift delivery for %s: %s", user.id, sent)
 
     log.info(
-        "Payment registered | uid=%s amount=%s prize=%s demo=%s",
-        user.id,
-        payment.total_amount,
-        prize["key"],
-        is_demo,
+        "Payment | uid=%s amount=%s prize=%s",
+        user.id, payment.total_amount, prize["key"],
     )
 
 
@@ -479,7 +487,7 @@ async def main() -> None:
             types.BotCommand(command="admin", description="Панель владельца"),
         ]
     )
-    log.info("Bot started | spin_cost=%s | webapp=%s | channel=%s", SPIN_COST, WEBAPP_URL, CHANNEL_URL)
+    log.info("Bot started | spin_cost=%s | webapp=%s | channel=%s", DEFAULT_SPIN_COST, WEBAPP_URL, CHANNEL_URL)
     await dp.start_polling(bot)
 
 

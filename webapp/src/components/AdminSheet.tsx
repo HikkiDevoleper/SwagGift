@@ -6,6 +6,7 @@ interface Props {
   onToggle: (key: keyof RuntimeFlags) => void;
   onClose: () => void;
   spinCost: number;
+  onSetSpinCost: (cost: number) => void;
   prizes: Prize[];
   onSaveWeights: (w: Record<string, number>) => void;
 }
@@ -18,8 +19,10 @@ const FLAGS: Record<keyof RuntimeFlags, [string, string]> = {
 };
 
 export const AdminSheet: React.FC<Props> = ({
-  flags, onToggle, onClose, spinCost, prizes, onSaveWeights,
+  flags, onToggle, onClose, spinCost, onSetSpinCost, prizes, onSaveWeights,
 }) => {
+  const [costInput, setCostInput] = useState(spinCost);
+  const [costDirty, setCostDirty] = useState(false);
   const [wts, setWts] = useState(() =>
     Object.fromEntries(prizes.map(p => [p.key, p.weight]))
   );
@@ -37,11 +40,31 @@ export const AdminSheet: React.FC<Props> = ({
           <button className="btn btn-outline btn-sm" onClick={onClose}>Закрыть</button>
         </div>
 
+        {/* Spin Cost */}
         <div className="admin-row">
           <span>Цена спина</span>
-          <span className="admin-val">{spinCost} ⭐</span>
+          <div className="cost-edit">
+            <input
+              className="wt-input"
+              type="number"
+              min={0}
+              title="Цена спина"
+              aria-label="Цена спина"
+              value={costInput}
+              onChange={e => { setCostInput(Math.max(0, parseInt(e.target.value) || 0)); setCostDirty(true); }}
+            />
+            {costDirty && (
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => { onSetSpinCost(costInput); setCostDirty(false); }}
+              >
+                ОК
+              </button>
+            )}
+          </div>
         </div>
 
+        {/* Flags */}
         {(Object.keys(flags) as Array<keyof RuntimeFlags>).map(k => {
           const on = flags[k];
           const [t, s] = FLAGS[k];
@@ -58,6 +81,7 @@ export const AdminSheet: React.FC<Props> = ({
           );
         })}
 
+        {/* Weights */}
         <div className="wt-lbl">Шансы призов</div>
         {prizes.map(p => (
           <div key={p.key} className="wt-row">
@@ -65,8 +89,7 @@ export const AdminSheet: React.FC<Props> = ({
             <span className="wt-name">{p.name}</span>
             <input
               className="wt-input"
-              type="number"
-              min={0} max={999}
+              type="number" min={0} max={999}
               title={`Вес: ${p.name}`}
               aria-label={`Вес: ${p.name}`}
               value={wts[p.key] ?? 0}
@@ -83,11 +106,10 @@ export const AdminSheet: React.FC<Props> = ({
 
         <button
           className="btn btn-w"
-          style={{ marginTop: 10 }}
           disabled={!dirty}
           onClick={() => { onSaveWeights(wts); setDirty(false); }}
         >
-          Сохранить
+          Сохранить шансы
         </button>
       </div>
     </>
