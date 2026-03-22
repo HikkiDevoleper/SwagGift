@@ -3,14 +3,26 @@ import { useAppLogic } from './hooks/useAppLogic';
 import { Roulette } from './components/Roulette';
 import { AdminSheet } from './components/AdminSheet';
 import { tg, cn, api, initialsOf, rankTitle, formatDate } from './utils';
-import { type Prize, type RuntimeFlags, type ScreenKey, type InventoryItem } from './types';
+import { type Prize, type RuntimeFlags, type ScreenKey, type InventoryItem, type HistoryRow } from './types';
 import './styles.css';
 
-/* ── Icons ─────────────────────────── */
+/* ── Icons ── */
 const IcDice = () => (<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor" stroke="none"/></svg>);
 const IcGift = () => (<svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>);
 const IcTrophy = () => (<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6v6z"/><path d="M6 3H4a1 1 0 0 0-1 1v1a3 3 0 0 0 3 3"/><path d="M18 3h2a1 1 0 0 1 1 1v1a3 3 0 0 1-3 3"/><path d="M12 15v3M8 21h8"/></svg>);
 const IcUser = () => (<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>);
+
+/* ── Helpers ── */
+const findBestWin = (history: HistoryRow[], catalog: Prize[]): HistoryRow | null => {
+  let best: HistoryRow | null = null;
+  let bestVal = 0;
+  for (const h of history) {
+    const cat = catalog.find(p => p.key === h.prize_key);
+    const sv = cat?.sell_value || 0;
+    if (sv > bestVal) { bestVal = sv; best = h; }
+  }
+  return best;
+};
 
 /* ═══════════════════════════════════ */
 export const App: React.FC = () => {
@@ -20,16 +32,16 @@ export const App: React.FC = () => {
   } = useAppLogic();
 
   const [spinning, setSpinning] = useState(false);
-  const [winner, setWinner]     = useState<Prize>();
+  const [winner, setWinner] = useState<Prize>();
   const [wonPrizeId, setWonPrizeId] = useState(0);
-  const [showRes, setShowRes]   = useState(false);
+  const [showRes, setShowRes] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [topupAmt, setTopupAmt] = useState(50);
   const [showTopup, setShowTopup] = useState(false);
   const spinRef = useRef(false);
   const tgPhoto = (tg?.initDataUnsafe?.user as any)?.photo_url || null;
 
-  /* ── SSE — always live, never blocked ── */
+  /* ── SSE — blocks HISTORY during spin to prevent spoiler ── */
   useEffect(() => {
     if (!boot) return;
     let es: EventSource;
@@ -40,11 +52,16 @@ export const App: React.FC = () => {
         try {
           const d = JSON.parse(ev.data);
           setLiveConnected(true);
-          setBoot(p => p ? {
-            ...p,
-            history: d.history ?? p.history,
-            leaderboard: d.leaderboard ?? p.leaderboard,
-          } : p);
+          setBoot(p => {
+            if (!p) return p;
+            return {
+              ...p,
+              // Block history updates during OWN spin to prevent spoiler
+              history: spinRef.current ? p.history : (d.history ?? p.history),
+              // Leaderboard always updates in real-time
+              leaderboard: d.leaderboard ?? p.leaderboard,
+            };
+          });
         } catch {}
       });
       es.onerror = () => { setLiveConnected(false); es.close(); retry = setTimeout(connect, 5000); };
@@ -54,11 +71,18 @@ export const App: React.FC = () => {
   }, [!!boot]);
 
   /* ── Guards ── */
-  if (!boot) return <div className="app"><div className="loading"><div className="loader" /><p>Загрузка…</p></div></div>;
+  if (!boot) return (
+    <div className="app">
+      <div className="loading">
+        <div className="loader" />
+        <p className="loading-text">Swag Gift</p>
+      </div>
+    </div>
+  );
   if (boot.flags.maint && !boot.is_owner) {
     return (<div className="app"><div className="maint">
       <div className="maint-icon">⏳</div>
-      <h1>Технические работы</h1><p>Swag Gift временно недоступен</p>
+      <h1>Технические работы</h1><p>Попробуйте позже</p>
     </div></div>);
   }
 
@@ -79,7 +103,7 @@ export const App: React.FC = () => {
     try {
       const r = await api<{ winner?: Prize; prize_id?: number; balance?: number; error?: string; spin_cost?: number }>('spin', 'POST');
       if (r.error === 'insufficient_balance') {
-        notify(`Нужно ${r.spin_cost} ⭐, у вас ${r.balance}`);
+        notify(`Нужно ${r.spin_cost} ⭐`);
         setShowTopup(true);
         return;
       }
@@ -141,7 +165,7 @@ export const App: React.FC = () => {
   const claimToInventory = () => setShowRes(false);
 
   const sellWonPrize = async () => {
-    if (!winner || wonPrizeId <= 0) { notify('Ошибка'); return; }
+    if (!winner || wonPrizeId <= 0) return;
     await doSell(wonPrizeId, winner.key);
     setShowRes(false);
   };
@@ -169,6 +193,50 @@ export const App: React.FC = () => {
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
+  /* ── Wins section (for spin page) ── */
+  const bestWin = findBestWin(boot.history, boot.prizes_catalog);
+
+  const WinsSection = () => {
+    if (boot.history.length === 0) return null;
+    const bestCat = bestWin ? boot.prizes_catalog.find(p => p.key === bestWin.prize_key) : null;
+    const others = boot.history.filter(h => h !== bestWin).slice(0, 8);
+
+    return (
+      <div className="wins-section">
+        <div className="wins-header">
+          <span className="wins-title">Выигрыши участников</span>
+          <span className="wins-live">
+            <span className={liveConnected ? 'pulse-dot' : 'pulse-dot off'} />
+            live
+          </span>
+        </div>
+        <div className="wins-row">
+          {/* Win of the day — pinned left */}
+          {bestWin && bestCat && (
+            <div className="win-best">
+              <div className="win-best-badge">⭐ Выигрыш дня</div>
+              <span className="win-best-emoji">{bestCat.emoji}</span>
+              <span className="win-best-name">{bestWin.first_name || bestWin.username || 'Игрок'}</span>
+              <span className="win-best-prize">{bestCat.name}</span>
+            </div>
+          )}
+          {/* Other recent wins */}
+          <div className="wins-bubbles">
+            {others.map((r, i) => {
+              const cat = boot.prizes_catalog.find(p => p.key === r.prize_key);
+              return (
+                <div key={i} className="bubble" data-delay={i}>
+                  <span className="bubble-emoji">{cat?.emoji || '🎁'}</span>
+                  <span className="bubble-name">{r.first_name || r.username || 'Игрок'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   /* ── Spin Page ── */
   const SpinPage = () => (
     <div className="page fade-in" key="spin">
@@ -178,37 +246,32 @@ export const App: React.FC = () => {
           <div className="spin-bar-ava">
             {tgPhoto ? <img src={tgPhoto} alt="" /> : initialsOf(boot.user)}
           </div>
-          <span className="spin-bar-name">{boot.user.first_name}</span>
-          {isDemo && <span className="tag">Demo</span>}
-        </div>
-        <button className="spin-bar-bal" onClick={() => setShowTopup(true)}>{balance} ⭐</button>
-      </div>
-
-      {/* Live history bubble ticker */}
-      {boot.history.length > 0 && (
-        <div className="ticker-wrap">
-          <div className="ticker">
-            {boot.history.slice(0, 10).map((r, i) => {
-              const cat = boot.prizes_catalog.find(p => p.key === r.prize_key);
-              return (
-                <div key={i} className="bubble">
-                  <span className="bubble-emoji">{cat?.emoji || '🎁'}</span>
-                  <span className="bubble-name">{r.first_name || r.username || 'Игрок'}</span>
-                </div>
-              );
-            })}
+          <div className="spin-bar-info">
+            <span className="spin-bar-name">{boot.user.first_name}</span>
+            {isDemo && <span className="tag">Demo</span>}
           </div>
         </div>
-      )}
+        <button className="bal-pill" onClick={() => setShowTopup(true)}>
+          <span className="bal-pill-icon">⭐</span>
+          <span className="bal-pill-val">{balance}</span>
+        </button>
+      </div>
+
+      {/* Wins section — always visible, spoiler-safe */}
+      <WinsSection />
 
       {/* Roulette card */}
       <div className="card roulette-card">
         <Roulette prizes={boot.prizes_catalog} isSpinning={spinning} winner={winner} onSpinEnd={onSpinEnd} />
-        <button className="btn btn-w spin-btn" onClick={doSpin} disabled={spinning}>
-          {spinning ? '🎰 Крутим…' : isDemo ? '🎲 Демо' : cost > 0 ? `Крутить — ${cost} ⭐` : '🎲 Крутить'}
+        <button className={cn('btn btn-spin', spinning && 'spinning')} onClick={doSpin} disabled={spinning}>
+          {spinning ? (
+            <><span className="spin-dots"><span /><span /><span /></span> Крутим</>
+          ) : isDemo ? '🎲 Демо' : cost > 0 ? `Крутить — ${cost} ⭐` : '🎲 Крутить'}
         </button>
         {!boot.free_used && (
-          <button className="btn btn-outline btn-mt" onClick={doFree} disabled={spinning}>Бесплатный шанс</button>
+          <button className="btn btn-free" onClick={doFree} disabled={spinning}>
+            🎁 Бесплатный шанс
+          </button>
         )}
       </div>
     </div>
@@ -218,20 +281,24 @@ export const App: React.FC = () => {
   const InvPage = () => (
     <div className="page fade-in" key="inv">
       <h1 className="pg-title">Мои призы</h1>
+      <p className="pg-sub">{boot.prizes.length} предметов</p>
       {boot.prizes.length === 0
         ? <div className="empty"><div className="empty-icon">📦</div><p>Ещё нет призов</p></div>
         : <div className="inv-grid">
             {boot.prizes.map((item, i) => {
               const cat = boot.prizes_catalog.find(p => p.key === item.key);
               const sv = cat?.sell_value || 0;
-              const isWithdrawing = item.status === 'withdrawing';
+              const isW = item.status === 'withdrawing';
               return (
-                <div key={item.id || i} className={cn('inv-item', isWithdrawing && 'withdrawing')}>
+                <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} data-delay={i % 6}>
                   <span className="inv-emoji">{cat?.emoji || '🎁'}</span>
                   <span className="inv-name">{item.name}</span>
-                  <span className="inv-rarity">{item.rarity}</span>
-                  {isWithdrawing ? (
-                    <span className="inv-status">⏳ Вывод…</span>
+                  <div className="inv-meta">
+                    <span className="inv-rarity">{item.rarity}</span>
+                    <span className="inv-date">{formatDate(item.date)}</span>
+                  </div>
+                  {isW ? (
+                    <div className="inv-status-badge">⏳ Ожидает выдачи</div>
                   ) : item.key !== 'nothing' && (
                     <div className="inv-btns">
                       <button className="inv-btn" onClick={() => doWithdraw(item.id)}>Вывести</button>
@@ -252,20 +319,24 @@ export const App: React.FC = () => {
   const TopPage = () => (
     <div className="page fade-in" key="top">
       <h1 className="pg-title">Рейтинг</h1>
+      <p className="pg-sub">Топ игроков</p>
       {boot.leaderboard.length === 0
         ? <div className="empty"><p>Пусто</p></div>
         : <div className="lb-list">
             {boot.leaderboard.map((r, i) => (
-              <div key={i} className="lb-row">
-                <span className={cn('lb-medal', i === 0 && 'gold', i === 1 && 'silver', i === 2 && 'bronze')}>
-                  {i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}
+              <div key={i} className={cn('lb-row', i < 3 && 'lb-top')} data-delay={i}>
+                <span className="lb-medal">
+                  {i < 3 ? ['🥇','🥈','🥉'][i] : <span className="lb-num">{i + 1}</span>}
                 </span>
                 <div className="lb-ava">{initialsOf(r)}</div>
                 <div className="lb-info">
                   <div className="lb-name">{r.first_name || r.username || 'Игрок'}</div>
                   <div className="lb-sub">{r.spins} спинов · {r.stars_spent} ⭐</div>
                 </div>
-                <div className="lb-wins">{r.wins} 🏆</div>
+                <div className="lb-right">
+                  <span className="lb-wins">{r.wins}</span>
+                  <span className="lb-wins-lbl">побед</span>
+                </div>
               </div>
             ))}
           </div>
@@ -282,8 +353,7 @@ export const App: React.FC = () => {
           <div className="prof-ava-lg">{tgPhoto ? <img src={tgPhoto} alt="" /> : initialsOf(u)}</div>
           <h2 className="prof-name">{u.first_name}</h2>
           {u.username && <p className="prof-handle">@{u.username}</p>}
-          <p className="prof-rank">{rankTitle(u.wins)}</p>
-
+          <span className="prof-rank-badge">{rankTitle(u.wins)}</span>
           <div className="prof-stats">
             <div className="prof-stat">
               <span className="prof-stat-val">{balance}</span>
@@ -301,8 +371,9 @@ export const App: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <button className="btn btn-w" onClick={() => setShowTopup(true)}>Пополнить баланс</button>
+        <button className="btn btn-topup-profile" onClick={() => setShowTopup(true)}>
+          ⭐ Пополнить баланс
+        </button>
         {boot.is_owner && (
           <button className="btn btn-outline btn-mt" onClick={() => setShowAdmin(true)}>⚙️ Управление</button>
         )}
@@ -311,10 +382,10 @@ export const App: React.FC = () => {
   };
 
   const TABS: { key: ScreenKey; icon: React.ReactElement; label: string }[] = [
-    { key: 'spin',      icon: <IcDice />,    label: 'Игра' },
-    { key: 'inventory', icon: <IcGift />,    label: 'Призы' },
-    { key: 'top',       icon: <IcTrophy />,  label: 'Топ' },
-    { key: 'profile',   icon: <IcUser />,    label: 'Профиль' },
+    { key: 'spin', icon: <IcDice />, label: 'Игра' },
+    { key: 'inventory', icon: <IcGift />, label: 'Призы' },
+    { key: 'top', icon: <IcTrophy />, label: 'Топ' },
+    { key: 'profile', icon: <IcUser />, label: 'Профиль' },
   ];
 
   const pages: Record<ScreenKey, () => React.ReactElement> = {
@@ -333,7 +404,7 @@ export const App: React.FC = () => {
         ))}
       </nav>
 
-      {/* Win result sheet */}
+      {/* Win result */}
       {showRes && winner && (
         <>
           <div className="overlay" onClick={claimToInventory} />
@@ -341,12 +412,15 @@ export const App: React.FC = () => {
             <div className="sheet-bar" />
             <div className="res">
               <div className="res-glow" />
+              <div className="res-particles">
+                {[...Array(6)].map((_, i) => <div key={i} className="particle" data-i={i} />)}
+              </div>
               <span className="res-emoji bounce">{winner.emoji}</span>
               <h2 className="res-title">{winner.name}</h2>
-              <p className="res-sub">{winner.rarity}</p>
-              <div className="btn-row">
-                <button className="btn btn-w" onClick={claimToInventory}>Забрать</button>
-                <button className="btn btn-outline" onClick={sellWonPrize}>
+              <p className="res-rarity">{winner.rarity}</p>
+              <div className="btn-row res-btns">
+                <button className="btn btn-claim" onClick={claimToInventory}>Забрать</button>
+                <button className="btn btn-sell-win" onClick={sellWonPrize}>
                   Продать {boot.prizes_catalog.find(p => p.key === winner.key)?.sell_value || 0} ⭐
                 </button>
               </div>
@@ -361,19 +435,19 @@ export const App: React.FC = () => {
           <div className="overlay" onClick={() => setShowTopup(false)} />
           <div className="sheet">
             <div className="sheet-bar" />
-            <h2 className="sheet-title">Пополнение баланса</h2>
+            <h2 className="sheet-title">⭐ Пополнение</h2>
             <p className="sheet-desc">Текущий баланс: {balance} ⭐</p>
             <div className="topup-grid">
               {[25, 50, 100, 250, 500].map(a => (
-                <button key={a} className={cn('topup-btn', topupAmt === a && 'on')} onClick={() => setTopupAmt(a)}>{a} ⭐</button>
+                <button key={a} className={cn('topup-btn', topupAmt === a && 'on')} onClick={() => setTopupAmt(a)}>{a}</button>
               ))}
             </div>
             <div className="topup-custom">
-              <input className="wt-input topup-input" type="number" min={1} max={10000} value={topupAmt}
+              <input className="topup-input" type="number" min={1} max={10000} value={topupAmt}
                 onChange={e => setTopupAmt(Math.max(1, parseInt(e.target.value) || 1))} aria-label="Сумма" />
               <span className="topup-label">⭐</span>
             </div>
-            <button className="btn btn-w" onClick={() => doTopup(topupAmt)}>Пополнить {topupAmt} ⭐</button>
+            <button className="btn btn-topup" onClick={() => doTopup(topupAmt)}>Пополнить {topupAmt} ⭐</button>
           </div>
         </>
       )}
