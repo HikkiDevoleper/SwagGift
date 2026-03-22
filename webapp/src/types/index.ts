@@ -50,6 +50,7 @@ export type HistoryRow = {
   won_at: string;
   first_name: string;
   username: string;
+  user_id?: number;
 };
 
 export type RuntimeFlags = {
