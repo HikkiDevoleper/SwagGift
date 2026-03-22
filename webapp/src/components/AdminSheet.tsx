@@ -9,6 +9,7 @@ interface Props {
   onSetSpinCost: (cost: number) => void;
   prizes: Prize[];
   onSaveWeights: (w: Record<string, number>) => void;
+  onEditBalance: (uid: number, amount: number) => void;
 }
 
 const FLAGS: Record<keyof RuntimeFlags, [string, string]> = {
@@ -19,10 +20,12 @@ const FLAGS: Record<keyof RuntimeFlags, [string, string]> = {
 };
 
 export const AdminSheet: React.FC<Props> = ({
-  flags, onToggle, onClose, spinCost, onSetSpinCost, prizes, onSaveWeights,
+  flags, onToggle, onClose, spinCost, onSetSpinCost, prizes, onSaveWeights, onEditBalance
 }) => {
   const [costInput, setCostInput] = useState(spinCost);
   const [costDirty, setCostDirty] = useState(false);
+  const [uidInput, setUidInput] = useState('');
+  const [balInput, setBalInput] = useState('');
   const [wts, setWts] = useState(() =>
     Object.fromEntries(prizes.map(p => [p.key, p.weight]))
   );
@@ -111,6 +114,36 @@ export const AdminSheet: React.FC<Props> = ({
         >
           Сохранить шансы
         </button>
+
+        {/* Edit Balance */}
+        <div className="admin-row" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>Выдать звёзды игроку</span>
+          <div className="cost-edit" style={{ marginTop: 8 }}>
+            <input
+              className="wt-input"
+              type="number" min={1} placeholder="User ID"
+              value={uidInput} onChange={e => setUidInput(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <input
+              className="wt-input"
+              type="number" min={0} placeholder="Кол-во ⭐"
+              value={balInput} onChange={e => setBalInput(e.target.value)}
+              style={{ width: 80 }}
+            />
+            <button
+              className="btn btn-outline btn-sm"
+              disabled={!uidInput || !balInput}
+              onClick={() => {
+                onEditBalance(parseInt(uidInput), parseInt(balInput));
+                setUidInput('');
+                setBalInput('');
+              }}
+            >
+              Выдать
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );

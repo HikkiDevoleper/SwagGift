@@ -20,7 +20,7 @@ export const App: React.FC = () => {
   } = useAppLogic();
 
   const [spinning, setSpinning] = useState(false);
-  const [winner, setWinner]     = useState<Prize>();
+  const [winner, setWinner]     = useState<Prize & { id?: number }>();
   const [showRes, setShowRes]   = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const spinRef = useRef(false);
@@ -64,17 +64,22 @@ export const App: React.FC = () => {
   /* ── Handlers ─────────────────────────────── */
   const doSpin = async () => {
     if (spinning) return;
-    // Demo spin — owner only, no cost
     if (isDemo) {
       try {
-        const r = await api<{ winner: Prize }>('demo_spin', 'POST');
+        const r = await api<{ winner: Prize & { id?: number } }>('demo_spin', 'POST');
         if (r.winner) { setWinner(r.winner); spinRef.current = true; setSpinning(true); }
       } catch (e: any) { notify(e.message || 'Ошибка'); }
       return;
     }
-    // Balance-based spin (instant)
+    
     try {
-      const r = await api<{ winner?: Prize; error?: string; balance?: number; spin_cost?: number }>('spin', 'POST');
+      const r = await api<{ winner?: Prize & { id?: number }; error?: string; balance?: number; spin_cost?: number; channel_url?: string }>('spin', 'POST');
+      if (r.error === 'not_subscribed') {
+        tg?.showConfirm('Нужна подписка на канал. Открыть?', (ok: boolean) => {
+          if (ok) tg?.openLink(r.channel_url || boot.config.channel_url);
+        });
+        return;
+      }
       if (r.error === 'insufficient_balance') {
         notify(`Недостаточно ⭐ (нужно ${r.spin_cost}, баланс ${r.balance})`);
         return;
@@ -86,7 +91,7 @@ export const App: React.FC = () => {
   const doFree = async () => {
     if (spinning || boot.free_used) return;
     try {
-      const r = await api<{ winner?: Prize; error?: string; channel_url?: string }>('free_spin', 'POST');
+      const r = await api<{ winner?: Prize & { id?: number }; error?: string; channel_url?: string }>('free_spin', 'POST');
       if (r.winner) { setWinner(r.winner); spinRef.current = true; setSpinning(true); }
       else if (r.error === 'not_subscribed') {
         tg?.showConfirm('Нужна подписка на канал. Открыть?', (ok: boolean) => {
@@ -108,9 +113,26 @@ export const App: React.FC = () => {
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
-  const doSell = async (item: InventoryItem) => {
-    const prizeInfo = boot.prizes_catalog.find(p => p.key === item.key);
-    if (!prizeInfo || prizeInfo.sell_value <= 0) { notify('Нельзя продать'); return; }
+  const promptTopup = () => {
+    tg?.showPopup({
+      title: 'Пополнение баланса',
+      message: 'Выберите сумму пополнения в Telegram Stars:',
+      buttons: [
+        { id: '15', type: 'default', text: '15 ⭐' },
+        { id: '50', type: 'default', text: '50 ⭐' },
+        { id: '250', type: 'default', text: '250 ⭐' },
+        { id: 'cancel', type: 'cancel' }
+      ]
+    }, (btnId: string) => {
+      if (btnId && btnId !== 'cancel') doTopup(parseInt(btnId));
+    });
+  };
+
+  const doSell = async (item: InventoryItem | (Prize & { id?: number })) => {
+    const sv = boot.prizes_catalog.find(p => p.key === item.key)?.sell_value || 0;
+    if (sv <= 0) { notify('Нельзя продать'); return; }
+    if (!item.id) { notify('Ошибка продажи: нет ID'); return; }
+    
     try {
       const r = await api<{ ok: boolean; sell_value: number; balance: number }>('sell', 'POST', {
         prize_id: item.id, prize_key: item.key,
@@ -147,55 +169,82 @@ export const App: React.FC = () => {
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
-  const setSpinCost = async (cost: number) => {
+  const setSpinCost = async (c: number) => {
     try {
-      const r = await api<{ spin_cost: number }>('admin/spin_cost', 'POST', { cost });
+      const r = await api<{ spin_cost: number }>('admin/spin_cost', 'POST', { cost: c });
       setBoot(p => p ? { ...p, config: { ...p.config, spin_cost: r.spin_cost } } : p);
       notify(`Цена: ${r.spin_cost} ⭐`);
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
+  const editUserBalance = async (uid: number, amount: number) => {
+    try {
+      const r = await api<{ ok: boolean; new_balance: number }>('admin/edit_balance', 'POST', { user_id: uid, amount });
+      if (r.ok) {
+        notify(`Баланс игрока ${uid} установлен на ${r.new_balance}⭐`);
+        if (uid === boot.user.user_id) refreshUser();
+      }
+    } catch (e: any) { notify(e.message || 'Ошибка'); }
+  };
+
   const claimPrize = () => {
-    notify('Подарок будет отправлен в Telegram');
     setShowRes(false);
     refreshUser();
   };
 
   const sellWon = () => {
-    if (!winner) return;
-    const sv = boot.prizes_catalog.find(p => p.key === winner.key)?.sell_value || 0;
-    notify(sv > 0 ? `Продано за ${sv} ⭐` : 'Нельзя продать');
+    if (!winner || !winner.id) {
+       notify('Ошибка продажи');
+       setShowRes(false);
+       return;
+    }
+    doSell(winner);
     setShowRes(false);
-    refreshUser();
   };
 
   /* ── Screens ─────────────────────────────── */
+  
   const SpinPage = () => (
     <div className="page" key="spin">
-      <div className="card">
-        <div className="spin-head">
-          <h1 className="spin-title">Рулетка</h1>
-          <span className="spin-cost">{balance} ⭐{isDemo ? ' · demo' : ''}</span>
+      
+      {/* Top Header: Profile + Balance */}
+      <div className="spin-header">
+        <div className="spin-prof" onClick={() => setActiveScreen('profile')}>
+          {tgPhoto ? <img src={tgPhoto} alt="" className="spin-ava" /> : <div className="spin-ava">{initialsOf(boot.user)}</div>}
+          <div className="spin-name">{boot.user.first_name}</div>
         </div>
-        <Roulette prizes={boot.prizes_catalog} isSpinning={spinning} winner={winner} onSpinEnd={onSpinEnd} />
-        <button className="btn btn-w" onClick={doSpin} disabled={spinning}>
-          {spinning ? 'Крутим…' : isDemo ? 'Демо-спин' : cost > 0 ? `Крутить — ${cost} ⭐` : 'Крутить бесплатно'}
-        </button>
-        {!boot.free_used && (
-          <button className="btn btn-outline btn-mt" onClick={doFree} disabled={spinning}>Бесплатный шанс</button>
-        )}
-        <button className="btn btn-outline btn-mt" onClick={() => doTopup(50)}>Пополнить баланс +50 ⭐</button>
+        <div className="spin-bal" onClick={promptTopup}>
+          {balance} ⭐
+          <div className="spin-bal-add">+</div>
+        </div>
       </div>
-      {!spinning && boot.history.length > 0 && (
-        <div className="card">
-          <p className="feed-h">Последние выигрыши</p>
-          {boot.history.slice(0, 6).map((r, i) => (
-            <div key={i} className="feed-row">
-              <div className="feed-dot" /><span className="feed-user">{r.first_name || r.username || 'Игрок'}</span><span className="feed-prize">{r.prize_name}</span>
-            </div>
-          ))}
+
+      {/* Horizontal History Feed at Top */}
+      {boot.history.length > 0 && (
+        <div className="feed-h-wrapper">
+          <div className="feed-h-track">
+            {boot.history.slice(0, 10).map((r, i) => (
+              <div key={i} className="feed-h-item">
+                <span className="feed-h-txt"><b>{r.first_name || r.username || 'Игрок'}</b> выиграл(а) {r.prize_name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Roulette Card */}
+      <div className="card spin-card">
+        <Roulette prizes={boot.prizes_catalog} isSpinning={spinning} winner={winner} onSpinEnd={onSpinEnd} />
+        
+        <div className="spin-actions">
+          <button className="btn btn-w btn-lg" onClick={doSpin} disabled={spinning}>
+            {spinning ? 'Крутим…' : isDemo ? 'Демо-спин' : cost > 0 ? `Крутить за ${cost} ⭐` : 'Крутить бесплатно'}
+          </button>
+          {!boot.free_used && (
+            <button className="btn btn-outline btn-mt" onClick={doFree} disabled={spinning}>Попробовать бесплатно</button>
+          )}
+        </div>
+      </div>
     </div>
   );
 
@@ -216,7 +265,7 @@ export const App: React.FC = () => {
                   <span className="inv-date">{formatDate(item.date)}</span>
                   {item.key !== 'nothing' && (
                     <div className="inv-btns">
-                      <button className="inv-btn" onClick={() => notify('Отправка в Telegram')}>Вывести</button>
+                      <button className="inv-btn" onClick={() => notify('Ваш подарок будет выдан вам в течение ближайшего времени')}>Вывести</button>
                       <button className="inv-btn" onClick={() => doSell(item)}>{sv > 0 ? `${sv} ⭐` : 'Продать'}</button>
                     </div>
                   )}
@@ -259,18 +308,23 @@ export const App: React.FC = () => {
           {u.username && <p className="prof-handle">@{u.username}</p>}
           <p className="prof-rank">{rankTitle(u.wins)}</p>
           <div className="prof-grid">
-            <div className="prof-cell"><span className="prof-val">{u.balance || 0}</span><span className="prof-lbl">Баланс ⭐</span></div>
+            <div className="prof-cell" onClick={promptTopup} style={{cursor: 'pointer'}}>
+              <span className="prof-val" style={{color: '#ffb800'}}>{u.balance || 0}</span>
+              <span className="prof-lbl">Баланс ⭐</span>
+            </div>
             <div className="prof-cell"><span className="prof-val">{u.wins}</span><span className="prof-lbl">Побед</span></div>
             <div className="prof-cell"><span className="prof-val">{u.spins}</span><span className="prof-lbl">Спинов</span></div>
           </div>
           <div className="prof-meta">
-            <span className={liveConnected ? 'dot-live' : 'dot-off'} />
-            {liveConnected ? 'Live' : 'Offline'}
-            {!boot.free_used && <span className="tag tag-on">Шанс</span>}
-            {isDemo && <span className="tag">Demo</span>}
+            <div className={liveConnected ? 'tag tag-live' : 'tag'}>
+              <span className={liveConnected ? 'dot-live' : 'dot-off'} />
+              {liveConnected ? 'Live' : 'Offline'}
+            </div>
+            {!boot.free_used && <div className="tag tag-on">Бесплатный шанс</div>}
+            {isDemo && <div className="tag">Demo</div>}
           </div>
         </div>
-        <button className="btn btn-outline" onClick={() => doTopup(100)}>Пополнить +100 ⭐</button>
+        <button className="btn btn-w" onClick={promptTopup}>Пополнить баланс</button>
         {boot.is_owner && (
           <button className="btn btn-outline btn-mt" onClick={() => setShowAdmin(true)}>Панель управления</button>
         )}
@@ -310,9 +364,9 @@ export const App: React.FC = () => {
               <h2 className="res-title">{winner.name}</h2>
               <p className="res-sub">{winner.rarity}</p>
               <div className="btn-row">
-                <button className="btn btn-w" onClick={claimPrize}>Забрать</button>
-                <button className="btn btn-outline" onClick={sellWon}>
-                  Продать {boot.prizes_catalog.find(p => p.key === winner.key)?.sell_value || 0} ⭐
+                <button className="btn btn-outline" onClick={claimPrize}>В инвентарь</button>
+                <button className="btn btn-w" onClick={sellWon}>
+                  Продать за {boot.prizes_catalog.find(p => p.key === winner.key)?.sell_value || 0} ⭐
                 </button>
               </div>
             </div>
@@ -327,6 +381,7 @@ export const App: React.FC = () => {
           onSetSpinCost={setSpinCost}
           prizes={boot.prizes_catalog}
           onSaveWeights={saveWeights}
+          onEditBalance={editUserBalance}
         />
       )}
       {toast && <div className="toast">{toast}</div>}

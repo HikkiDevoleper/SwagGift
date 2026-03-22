@@ -183,6 +183,16 @@ async def spin_api(request: Request) -> Dict[str, Any]:
     uid = user["id"]
     spin_cost = await runtime_state.get_spin_cost()
 
+    try:
+        member = await bot_instance.get_chat_member(CHANNEL_ID, uid)
+        subscribed = member.status in ("member", "administrator", "creator")
+    except Exception as exc:
+        log.exception("Sub check failed for %s: %s", uid, exc)
+        subscribed = False
+
+    if not subscribed:
+        return {"error": "not_subscribed", "channel_url": CHANNEL_URL}
+
     if spin_cost > 0:
         ok = await db.deduct_balance(uid, spin_cost)
         if not ok:
@@ -192,7 +202,9 @@ async def spin_api(request: Request) -> Dict[str, Any]:
     from bot import pick_prize
 
     winner = pick_prize()
-    await db.record_spin(uid, winner, is_demo=False, is_free=False, stars=spin_cost)
+    prize_id = await db.record_spin(uid, winner, is_demo=False, is_free=False, stars=spin_cost)
+    if prize_id is not None:
+        winner["id"] = prize_id
     log.info("Spin | uid=%s prize=%s cost=%s", uid, winner["key"], spin_cost)
     return {"winner": winner}
 
@@ -211,7 +223,9 @@ async def demo_spin_api(request: Request) -> Dict[str, Any]:
     from bot import pick_prize
 
     winner = pick_prize()
-    await db.record_spin(user["id"], winner, is_demo=True, is_free=False)
+    prize_id = await db.record_spin(user["id"], winner, is_demo=True, is_free=False)
+    if prize_id is not None:
+        winner["id"] = prize_id
     log.info("Demo spin | uid=%s prize=%s", user["id"], winner["key"])
     return {"winner": winner, "is_demo": True}
 
@@ -240,7 +254,9 @@ async def free_spin_api(request: Request) -> Dict[str, Any]:
 
     winner = pick_prize()
     await db.mark_free_used(uid)
-    await db.record_spin(uid, winner, is_demo=False, is_free=True)
+    prize_id = await db.record_spin(uid, winner, is_demo=False, is_free=True)
+    if prize_id is not None:
+        winner["id"] = prize_id
     log.info("Free spin | uid=%s prize=%s", uid, winner["key"])
     return {"winner": winner, "free_used": True}
 
@@ -401,6 +417,28 @@ async def set_spin_cost_api(request: Request) -> Dict[str, Any]:
     new_cost = await runtime_state.set_spin_cost(cost)
     log.info("Spin cost changed to %s by owner", new_cost)
     return {"ok": True, "spin_cost": new_cost}
+
+
+@app.post("/api/admin/edit_balance")
+async def edit_user_balance_api(request: Request) -> Dict[str, Any]:
+    """Owner can set any user's balance."""
+    user = await get_telegram_user(request)
+    if user["id"] != OWNER_ID:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    body = await request.json()
+    target_uid = int(body.get("user_id", 0))
+    amount = int(body.get("amount", -1))
+    
+    if target_uid <= 0 or amount < 0:
+        raise HTTPException(status_code=400, detail="Invalid target UID or amount")
+        
+    target_user = await db.get_user(target_uid)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    ok = await db.set_user_balance(target_uid, amount)
+    log.info("Admin edited balance | target=%s new_balance=%s admin=%s", target_uid, amount, user["id"])
+    return {"ok": ok, "user_id": target_uid, "new_balance": amount}
 
 
 # ─── Static files ────────────────────────────────────

@@ -154,12 +154,13 @@ body {
 /* ── Reel cards ────────────────────────────────────── */
 
 .reel-card {
-  width: 88px;      /* FIXED width, not min-width */
+  width: 88px;
   height: 106px;
-  margin: 0 4px;    /* step = 88 + 8 = 96 */
+  margin: 0 4px;
   background: var(--s2);
   border: 1px solid var(--w08);
   border-radius: var(--r);
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -273,34 +274,128 @@ body {
    SPIN PAGE
    ═══════════════════════════════════════════════════════ */
 
-.spin-head {
+.spin-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(20, 20, 31, 0.8);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--w08);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.spin-title {
-  font-size: 18px;
+.spin-prof {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.spin-ava {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--s3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--w60);
+  object-fit: cover;
+  border: 1px solid var(--w15);
+}
+
+.spin-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.spin-bal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 184, 0, 0.1);
+  color: #ffb800;
+  padding: 6px 10px 6px 14px;
+  border-radius: 100px;
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: -0.4px;
-  margin: 0;
+  cursor: pointer;
+  border: 1px solid rgba(255, 184, 0, 0.2);
 }
 
-.spin-cost {
-  font-size: 13px;
-  font-weight: 700;
+.spin-bal-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #ffb800;
+  color: #000;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.spin-card {
+  padding: 16px 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.spin-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 100%;
+  background: radial-gradient(circle at 50% 0%, rgba(255,184,0,0.05) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.spin-actions {
+  padding: 0 16px;
+}
+
+/* ── Feed (horizontal marquee) ─────────────────────── */
+
+.feed-h-wrapper {
+  overflow: hidden;
+  background: var(--s2);
+  border-bottom: 1px solid var(--w04);
+  padding: 8px 0;
+  white-space: nowrap;
+  display: flex;
+}
+
+.feed-h-track {
+  display: inline-flex;
+  gap: 24px;
+  padding-left: 100%;
+  animation: marquee 25s linear infinite;
+}
+
+.feed-h-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feed-h-txt {
+  font-size: 12px;
   color: var(--w35);
 }
 
-/* ── Feed (recent wins) ────────────────────────────── */
+.feed-h-txt b {
+  color: var(--w80);
+  font-weight: 600;
+}
 
-.feed-h {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--w35);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  margin: 0 0 8px;
+@keyframes marquee {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-100%, 0, 0); }
 }
 
 .feed-row {
@@ -423,12 +518,31 @@ body {
 
 .prof-meta {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 14px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--w08);
+  padding: 4px 10px;
+  border-radius: 100px;
   font-size: 11px;
-  color: var(--w35);
   font-weight: 600;
+  color: var(--w60);
+}
+
+.tag-live {
+  border: 1px solid var(--w15);
+}
+
+.tag-on {
+  color: #000;
+  background: var(--w80);
 }
 
 .dot-live {

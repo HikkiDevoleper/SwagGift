@@ -215,7 +215,7 @@ class Database:
         is_free: bool = False,
         stars: int = 0,
         charge_id: str = "",
-    ) -> None:
+    ) -> Optional[int]:
         won = prize["type"] != "nothing"
         async with self._connection() as db:
             await db.execute(
@@ -231,7 +231,7 @@ class Database:
             )
 
             if won:
-                await db.execute(
+                cur = await db.execute(
                     """
                     INSERT INTO prizes (user_id, prize_key, prize_name, rarity, is_demo, is_free, won_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -246,6 +246,9 @@ class Database:
                         utc_now_iso(),
                     ),
                 )
+                prize_id = cur.lastrowid
+            else:
+                prize_id = None
 
             if charge_id:
                 await db.execute(
@@ -258,6 +261,17 @@ class Database:
                 )
 
             await db.commit()
+            return prize_id
+
+    async def set_user_balance(self, uid: int, amount: int) -> bool:
+        """Admin force set balance."""
+        async with self._connection() as db:
+            cur = await db.execute(
+                "UPDATE users SET balance = ?, updated_at = ? WHERE user_id = ?",
+                (max(0, amount), utc_now_iso(), uid),
+            )
+            await db.commit()
+            return cur.rowcount > 0
 
     async def get_prizes(self, uid: int, limit: int = 20) -> List[Dict[str, Any]]:
         async with self._connection() as db:
