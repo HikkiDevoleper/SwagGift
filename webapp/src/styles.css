@@ -3,11 +3,11 @@
    ═══════════════════════════════════════════════════════ */
 
 :root {
-  --bg:   #000000;
+  --bg:   #030303;
   --s1:   #0a0a0a;
-  --s2:   #111111;
-  --s3:   #1a1a1a;
-  --s4:   #222222;
+  --s2:   #121212;
+  --s3:   #1c1c1c;
+  --s4:   #2a2a2a;
 
   --w:    #ffffff;
   --w90:  rgba(255,255,255,0.9);
@@ -171,14 +171,9 @@ body {
 
 .reel-card.--win {
   border-color: var(--w35);
-  box-shadow: 0 0 18px rgba(255,255,255,0.08);
+  background: var(--s3);
   transform: scale(1.05);
-  animation: winPulse 1.6s ease-in-out infinite;
-}
-
-@keyframes winPulse {
-  0%, 100% { box-shadow: 0 0 18px rgba(255,255,255,0.08); }
-  50%      { box-shadow: 0 0 28px rgba(255,255,255,0.14); }
+  z-index: 2;
 }
 
 .reel-emoji { font-size: 30px; line-height: 1; }
@@ -311,9 +306,9 @@ body {
 .spin-bar-bal {
   font-size: 14px;
   font-weight: 800;
-  color: var(--w);
-  background: var(--s2);
-  border: 1px solid var(--w15);
+  color: #000;
+  background: var(--w);
+  border: none;
   border-radius: 20px;
   padding: 6px 16px;
   cursor: pointer;
@@ -321,7 +316,7 @@ body {
   transition: 0.2s;
 }
 
-.spin-bar-bal:active { background: var(--s3); transform: scale(0.96); }
+.spin-bar-bal:active { transform: scale(0.96); opacity: 0.9; }
 
 .spin-btn { font-size: 15px; }
 .spin-btn.spinning {
@@ -816,18 +811,12 @@ body {
 
 .res-glow {
   position: absolute;
-  top: -20px; left: 50%;
-  transform: translateX(-50%);
-  width: 140px; height: 140px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 220px; height: 220px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 60%);
   pointer-events: none;
-  animation: glowPulse 2s ease-in-out infinite;
-}
-
-@keyframes glowPulse {
-  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
-  50%      { opacity: 1;   transform: translateX(-50%) scale(1.15); }
 }
 
 .res-emoji {

@@ -39,6 +39,10 @@ export const TgsPlayer: React.FC<Props> = ({
           autoplay,
           animationData: json,
         });
+
+        if (!autoplay && animRef.current) {
+          animRef.current.goToAndStop(0, true);
+        }
       } catch {
         // Silently fail — emoji fallback is in parent
       }

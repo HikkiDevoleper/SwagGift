@@ -1,35 +1,36 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { tg, rarityClass, makeReel } from '../utils';
 import { type Prize } from '../types';
-import { makeReel, rarityClass, tg } from '../utils';
+import { TgsPlayer } from './TgsPlayer';
+
+const CARD_W = 88;
+const GAP = 8;
+const STEP = CARD_W + GAP;
 
 interface Props {
   prizes: Prize[];
-  onSpinEnd: (winner: Prize) => void;
   isSpinning: boolean;
   winner?: Prize;
+  onSpinEnd: (p: Prize) => void;
 }
 
-// Must match CSS: .reel-card { width: 88px; margin: 0 4px; } → step = 96
-const CARD_W = 88;
-const CARD_M = 4;
-const STEP = CARD_W + CARD_M * 2; // 96
-
-export const Roulette: React.FC<Props> = ({ prizes, onSpinEnd, isSpinning, winner }) => {
+export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [reel, setReel]     = useState<Prize[]>([]);
-  const [tx, setTx]         = useState(0);
-  const [dur, setDur]       = useState(0);
+  const [reel, setReel] = useState<Prize[]>([]);
+  const [tx, setTx] = useState(0);
+  const [dur, setDur] = useState(0);
   const [winIdx, setWinIdx] = useState(-1);
   const busy = useRef(false);
 
-  // Measure actual container width
-  const getW = useCallback(() => wrapRef.current?.offsetWidth || 340, []);
+  // Helper
+  const getW = () => wrapRef.current?.clientWidth || 300;
 
-  // Idle reel — center card ~5 so the strip looks populated
+  // INIT
   useEffect(() => {
-    if (!prizes.length) return;
-    const idleReel = makeReel(prizes).reel;
-    setReel(idleReel);
+    if (isSpinning || busy.current || !prizes.length) return;
+    const { reel: newReel } = makeReel(prizes);
+    setReel(newReel);
+    setWinIdx(-1);
     setDur(0);
     // No CSS padding! Center card 5 purely via translateX:
     setTx(getW() / 2 - 5 * STEP - STEP / 2);
@@ -90,8 +91,12 @@ export const Roulette: React.FC<Props> = ({ prizes, onSpinEnd, isSpinning, winne
         }}
       >
         {reel.map((item, i) => (
-          <div key={i} className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}>
-            <span className="reel-emoji">{item.emoji}</span>
+          <div key={`${i}-${item.key}`} className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}>
+            {item.tgs ? (
+              <TgsPlayer src={`/gifts/${item.tgs}`} size={56} autoplay={false} />
+            ) : (
+              <span className="reel-emoji">{item.emoji}</span>
+            )}
             <span className="reel-name">{item.name}</span>
           </div>
         ))}

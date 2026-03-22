@@ -1,49 +1,60 @@
 import React, { useState } from 'react';
+import { tg } from '../utils';
 import { type RuntimeFlags, type Prize } from '../types';
-import { api } from '../utils';
+import { TgsPlayer } from './TgsPlayer';
+
+const FLAGS: Record<keyof RuntimeFlags, [string, string]> = {
+  demo: ['Режим Демо', 'Бесплатная прокрутка для тестов'],
+  gifts: ['Выдача призов', 'Зачислять призы в инвентарь'],
+  maint: ['Тех. работы', 'Закрыть доступ обычным юзерам'],
+  testpay: ['Тестовая оплата', 'Telegram Stars v2 API (Test)'],
+};
 
 interface Props {
   flags: RuntimeFlags;
-  onToggle: (key: keyof RuntimeFlags) => void;
-  onClose: () => void;
   spinCost: number;
-  onSetSpinCost: (cost: number) => void;
   prizes: Prize[];
-  onSaveWeights: (w: Record<string, number>) => void;
+  onToggle: (k: keyof RuntimeFlags) => void;
+  onSetSpinCost: (c: number) => void;
+  onSaveWeights: (v: Record<string, number>) => void;
   onNotify: (msg: string) => void;
+  onClose: () => void;
 }
 
-const FLAGS: Record<keyof RuntimeFlags, [string, string]> = {
-  demo:    ['Демо', 'Спины без оплаты'],
-  gifts:   ['Подарки', 'Автовыдача в Telegram'],
-  maint:   ['Техработы', 'Закрыть для юзеров'],
-  testpay: ['Тест оплаты', 'Резервный флаг'],
-};
-
 export const AdminSheet: React.FC<Props> = ({
-  flags, onToggle, onClose, spinCost, onSetSpinCost, prizes, onSaveWeights, onNotify,
+  flags, spinCost, prizes, onToggle, onSetSpinCost, onSaveWeights, onNotify, onClose,
 }) => {
-  const [costInput, setCostInput] = useState(spinCost);
-  const [costDirty, setCostDirty] = useState(false);
-  const [wts, setWts] = useState(() =>
-    Object.fromEntries(prizes.map(p => [p.key, p.weight]))
+  const [weights, setWeights] = useState<Record<string, number>>(
+    prizes.reduce((a, p) => ({ ...a, [p.key]: p.weight }), {})
   );
   const [dirty, setDirty] = useState(false);
-  const total = Object.values(wts).reduce((a, b) => a + b, 0);
+  const [costInput, setCostInput] = useState(spinCost);
+  const [costDirty, setCostDirty] = useState(false);
 
-  // Admin: set balance
   const [balUid, setBalUid] = useState('');
   const [balDelta, setBalDelta] = useState('');
 
   const doSetBalance = async () => {
-    const uid = parseInt(balUid);
-    const delta = parseInt(balDelta);
-    if (!uid || isNaN(delta)) { onNotify('Ошибка ввода'); return; }
+    if (!balUid || !balDelta) return;
     try {
-      const r = await api<{ ok: boolean; balance: number; user_id: number }>('admin/set_balance', 'POST', { user_id: uid, delta });
-      onNotify(`uid=${r.user_id} баланс=${r.balance} ⭐`);
-    } catch (e: any) { onNotify(e.message || 'Ошибка'); }
+      const resp = await fetch('/api/admin/set_balance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': tg?.initData || '',
+        },
+        body: JSON.stringify({ user_id: parseInt(balUid), delta: parseInt(balDelta) }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail);
+      onNotify(`Баланс обновлен: ${data.balance} ⭐`);
+      setBalUid(''); setBalDelta('');
+    } catch (e: any) {
+      onNotify('Ошибка: ' + e.message);
+    }
   };
+
+  const total = Object.values(weights).reduce((a, b) => a + Number(b), 0);
 
   return (
     <>
@@ -52,7 +63,9 @@ export const AdminSheet: React.FC<Props> = ({
         <div className="sheet-bar" />
         <div className="admin-hdr">
           <h2>Управление</h2>
-          <button className="btn btn-outline btn-sm" onClick={onClose}>✕</button>
+          {dirty && (
+            <button className="btn btn-outline btn-sm" onClick={() => { onSaveWeights(weights); setDirty(false); }}>Сохранить</button>
+          )}
         </div>
 
         {/* Spin Cost */}
@@ -96,20 +109,28 @@ export const AdminSheet: React.FC<Props> = ({
         <div className="wt-lbl">Шансы призов</div>
         {prizes.map(p => (
           <div key={p.key} className="wt-row">
-            <span className="wt-emoji">{p.emoji}</span>
+            {p.tgs ? (
+              <div style={{ flexShrink: 0, marginRight: 6 }}>
+                <TgsPlayer src={`/gifts/${p.tgs}`} size={18} autoplay={false} />
+              </div>
+            ) : (
+              <span className="wt-emoji">{p.emoji}</span>
+            )}
             <span className="wt-name">{p.name}</span>
+            <span className="wt-pct">{total > 0 ? ((weights[p.key] / total) * 100).toFixed(0) : 0}%</span>
             <input
-              className="wt-input" type="number" min={0} max={999}
-              title={`Вес: ${p.name}`} aria-label={`Вес: ${p.name}`}
-              value={wts[p.key] ?? 0}
-              onChange={e => { setWts(v => ({ ...v, [p.key]: Math.max(0, parseInt(e.target.value) || 0) })); setDirty(true); }}
+              className="wt-input"
+              type="number" min={0}
+              title={`Шанс: ${p.name}`} aria-label={`Шанс: ${p.name}`}
+              value={weights[p.key]}
+              onChange={e => {
+                setWeights(w => ({ ...w, [p.key]: parseInt(e.target.value) || 0 }));
+                setDirty(true);
+              }}
             />
-            <span className="wt-pct">{total > 0 ? Math.round((wts[p.key] / total) * 100) : 0}%</span>
           </div>
         ))}
-        <button className="btn btn-w" disabled={!dirty} onClick={() => { onSaveWeights(wts); setDirty(false); }}>
-          Сохранить шансы
-        </button>
+        <div style={{ paddingBottom: 60 }} />
       </div>
     </>
   );
