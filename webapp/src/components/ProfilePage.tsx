@@ -42,7 +42,7 @@ export const ProfilePage: React.FC<Props> = ({ user, isOwner, onTopup, onAdmin }
 
       <button className="btn btn-w" onClick={onTopup}>Пополнить баланс</button>
       {isOwner && (
-        <button className="btn btn-outline btn-mt" onClick={onAdmin}>⚙️ Управление</button>
+        <button className="btn btn-outline btn-mt" onClick={onAdmin}>Управление</button>
       )}
     </div>
   );

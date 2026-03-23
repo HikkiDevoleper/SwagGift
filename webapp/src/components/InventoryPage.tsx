@@ -16,7 +16,7 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
     <div className="page fade-in" key="inv">
       <h1 className="pg-title">Мои призы</h1>
       {prizes.length === 0 ? (
-        <div className="empty"><div className="empty-icon">📦</div><p>Ещё нет призов</p></div>
+        <div className="empty"><p>Ещё нет призов</p></div>
       ) : (
         <div className="inv-grid">
           {prizes.map((item, i) => {

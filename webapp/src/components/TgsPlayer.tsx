@@ -13,6 +13,17 @@ interface Props {
 // Global cache for parsed TGS JSON to prevent massive lag during roulette generation
 const _jsonCache = new Map<string, Promise<any>>();
 
+export function preloadTgs(src: string): Promise<any> {
+  let jsonPromise = _jsonCache.get(src);
+  if (!jsonPromise) {
+    jsonPromise = fetch(src)
+      .then(r => r.arrayBuffer())
+      .then(buf => JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' })));
+    _jsonCache.set(src, jsonPromise);
+  }
+  return jsonPromise;
+}
+
 export const TgsPlayer: React.FC<Props> = ({
   src, size = 120, loop = true, autoplay = true, className,
 }) => {
@@ -25,15 +36,7 @@ export const TgsPlayer: React.FC<Props> = ({
 
     const load = async () => {
       try {
-        let jsonPromise = _jsonCache.get(src);
-        if (!jsonPromise) {
-          jsonPromise = fetch(src)
-            .then(r => r.arrayBuffer())
-            .then(buf => JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' })));
-          _jsonCache.set(src, jsonPromise);
-        }
-
-        const json = await jsonPromise;
+        const json = await preloadTgs(src);
         if (cancelled || !ref.current) return;
 
         animRef.current = lottie.loadAnimation({

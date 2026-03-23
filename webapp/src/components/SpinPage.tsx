@@ -40,7 +40,7 @@ export const SpinPage: React.FC<Props> = ({
       <div className="card roulette-card">
         <Roulette prizes={boot.prizes_catalog} isSpinning={spinning} winner={winner} onSpinEnd={onSpinEnd} />
         <button className={`btn btn-w spin-btn ${spinning ? 'spinning' : ''}`} onClick={onSpin} disabled={spinning}>
-          {spinning ? '🎰 Крутим…' : isDemo ? '🎲 Демо' : cost > 0 ? `Крутить — ${cost} ⭐` : '🎲 Крутить'}
+          {spinning ? 'Крутим…' : isDemo ? 'Демо' : cost > 0 ? `Крутить — ${cost} ⭐` : 'Крутить'}
         </button>
         {!boot.free_used && (
           <button className="btn btn-outline btn-mt" onClick={onFreeSpin} disabled={spinning}>

@@ -4,6 +4,7 @@ import { SpinPage } from './components/SpinPage';
 import { InventoryPage } from './components/InventoryPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { ProfilePage } from './components/ProfilePage';
+import { preloadTgs } from './components/TgsPlayer';
 import { WinSheet } from './components/WinSheet';
 import { TopupSheet } from './components/TopupSheet';
 import { AdminSheet } from './components/AdminSheet';
@@ -40,10 +41,16 @@ export const App: React.FC = () => {
       .map(p => p.tgs)
       .filter((tgs): tgs is string => !!tgs)
       .slice(0, 40);
-    for (const tgs of list) {
-      // browser cache warm-up
-      fetch(`/gifts/${tgs}`).catch(() => {});
-    }
+
+    // Warm-up: fetch + inflate + JSON parse into TgsPlayer cache.
+    // Do sequentially to avoid spiking CPU on low-end devices.
+    (async () => {
+      for (const tgs of list) {
+        try {
+          await preloadTgs(`/gifts/${tgs}`);
+        } catch {}
+      }
+    })();
   }, [!!boot]);
 
   /* ── SSE: always live (ticker is always visible, shows everyone's wins) ── */
