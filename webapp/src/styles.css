@@ -77,6 +77,19 @@ body {
   to   { opacity: 1; transform: none; }
 }
 
+/* ────────────────────────────────────────────────────────
+   TGS PLAYER COMPONENT
+   ──────────────────────────────────────────────────────── */
+
+.tgs-player {
+  width: var(--size, 120px);
+  height: var(--size, 120px);
+}
+
+/* ────────────────────────────────────────────────────────
+   MEDIA
+   ──────────────────────────────────────────────────────── */
+
 /* ── Card ──────────────────────────────────────────── */
 
 .card {
@@ -152,6 +165,8 @@ body {
   height: 100%;
   align-items: center;
   will-change: transform;
+  transform: translateX(var(--tx, 0));
+  transition: transform var(--dur, 0s) cubic-bezier(0.02, 0.95, 0.05, 1);
 }
 
 /* ── Reel cards ────────────────────────────────────── */
@@ -177,6 +192,12 @@ body {
   background: var(--s3);
   transform: scale(1.05);
   z-index: 2;
+}
+
+.reel-tgs {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
 }
 
 .reel-emoji { font-size: 30px; line-height: 1; }
@@ -362,29 +383,26 @@ body {
 .wins-scroll::-webkit-scrollbar { display: none; }
 
 .bubble {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px 4px 6px;
-  background: var(--s2);
-  border: 1px solid var(--w08);
+  background: var(--bg);
+  padding: 6px 12px;
   border-radius: 20px;
-  font-size: 12px;
+  border: 1px solid var(--w08);
+  font-size: 13px;
+  font-weight: 600;
+  animation: tickIn 0.3s var(--ease) backwards;
+  animation-delay: var(--delay, 0s);
+  white-space: nowrap;
+}
+
+.bubble-tgs {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
   flex-shrink: 0;
-  animation: bubbleIn 0.3s var(--ease) both;
+  object-fit: contain;
 }
-
-.bubble:nth-child(1) { animation-delay: 0ms; }
-.bubble:nth-child(2) { animation-delay: 30ms; }
-.bubble:nth-child(3) { animation-delay: 60ms; }
-.bubble:nth-child(4) { animation-delay: 90ms; }
-
-@keyframes bubbleIn {
-  from { opacity: 0; transform: scale(0.85); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-.bubble-emoji { font-size: 14px; line-height: 1; }
 
 .bubble-name {
   font-weight: 600;
@@ -586,11 +604,12 @@ body {
   position: relative;
   overflow: hidden;
   animation: zoomIn 0.3s var(--ease) backwards;
+  animation-delay: var(--delay, 0s);
 }
 
 .inv-item.withdrawing {
-  border-color: var(--w15);
-  opacity: 0.7;
+  opacity: 0.5;
+  filter: grayscale(1);
 }
 
 @keyframes invIn {
@@ -602,8 +621,10 @@ body {
 .inv-item:nth-child(3) { animation-delay: 60ms; }
 .inv-item:nth-child(4) { animation-delay: 90ms; }
 
-.inv-emoji {
-  font-size: 32px;
+.inv-tgs {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
   align-self: center;
   margin-bottom: 6px;
 }

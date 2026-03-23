@@ -28,9 +28,9 @@ export const WinsTicker: React.FC<Props> = ({ history, catalog, spinning, userId
         {display.slice(0, 10).map((r, i) => {
           const cat = catalog.find(p => p.key === r.prize_key);
           return (
-            <div key={`${r.won_at}-${i}`} className="bubble" style={{ animationDelay: `${i * 40}ms` }}>
+            <div key={`${r.won_at}-${i}`} className="bubble" style={{ '--delay': `${i * 40}ms` } as React.CSSProperties}>
               {cat?.tgs && TGS_SVGS[cat.tgs] ? (
-                <img src={TGS_SVGS[cat.tgs]} alt="" style={{ width: 18, height: 18, marginRight: 4, flexShrink: 0 }} />
+                <img src={TGS_SVGS[cat.tgs]} alt="" className="bubble-tgs" />
               ) : (
                 <span className="bubble-emoji">{cat?.emoji || '🎁'}</span>
               )}

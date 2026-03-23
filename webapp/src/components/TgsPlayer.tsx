@@ -100,6 +100,6 @@ export const TgsPlayer: React.FC<Props> = ({
     };
   }, [src, loop, autoplay]);
 
-  return <div ref={ref} className={className} style={{ width: size, height: size }} />;
+  return <div ref={ref} className={`tgs-player ${className || ''}`} style={{ '--size': `${size}px` } as React.CSSProperties} />;
 };
 

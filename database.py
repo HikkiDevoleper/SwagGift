@@ -164,6 +164,7 @@ class Database:
             )
             await db.commit()
             return cur.rowcount > 0
+        return False
 
     async def sell_prize(self, uid: int, prize_id: int, sell_value: int) -> bool:
         """Mark prize as sold, credit balance."""
@@ -191,6 +192,7 @@ class Database:
             )
             await db.commit()
             return cur.rowcount > 0
+        return False
 
     async def is_banned(self, uid: int) -> bool:
         user = await self.get_user(uid)
@@ -331,6 +333,7 @@ class Database:
                     }
                     for row in rows
                 ]
+        return []
 
     async def get_payment(self, charge_id: str) -> Optional[Dict[str, Any]]:
         async with self._connection() as db:
@@ -357,9 +360,10 @@ class Database:
 
     async def total_users(self) -> int:
         async with self._connection() as db:
-            async with db.execute("SELECT COUNT(*) AS total FROM users") as cur:
+            async with db.execute("SELECT COUNT(id) FROM users") as cur:
                 row = await cur.fetchone()
-                return int(row["total"]) if row else 0
+                return row[0] if row else 0
+        return 0
 
     async def total_spins(self) -> int:
         async with self._connection() as db:

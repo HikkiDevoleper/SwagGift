@@ -12,7 +12,7 @@ export const ProfilePage: React.FC<Props> = ({ user, onClose }) => {
       <div className="pg-hdr">
         <button className="btn-back" onClick={onClose}>Назад</button>
         <span className="pg-title">Профиль</span>
-        <div style={{ width: 44 }} />
+        <div className="pg-hdr-filler" />
       </div>
 
       <div className="prof-card">

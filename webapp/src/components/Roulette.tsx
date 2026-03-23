@@ -88,17 +88,14 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
       <div className="reel-pointer" />
       <div
         className="reel-track"
-        style={{
-          transform: `translateX(${tx}px)`,
-          transition: dur > 0 ? `transform ${dur}s cubic-bezier(0.02, 0.95, 0.05, 1)` : 'none',
-        }}
+        style={{ '--tx': `${tx}px`, '--dur': dur > 0 ? `${dur}s` : '0s' } as React.CSSProperties}
       >
         {reel.map((p, i) => {
           const isWin = isSpinning && winner && i === winIdx; // Use winIdx for current state
           return (
             <div key={`${i}-${p.key}`} className={`reel-card r-${rarityClass(p.rarity)} ${isWin ? '--win' : ''}`}>
               {p.tgs && TGS_SVGS[p.tgs] ? (
-                <img src={TGS_SVGS[p.tgs]} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
+                <img src={TGS_SVGS[p.tgs]} alt="" className="reel-tgs" />
               ) : (
                 <span className="reel-emoji">{p.emoji}</span>
               )}

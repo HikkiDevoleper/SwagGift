@@ -22,9 +22,9 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
           const sv = cat?.sell_value || 0;
           const isW = item.status === 'withdrawing';
           return (
-            <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} style={{ animationDelay: `${i * 35}ms` }}>
+            <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} style={{ '--delay': `${i * 35}ms` } as React.CSSProperties}>
               {cat?.tgs && TGS_SVGS[cat.tgs] ? (
-                <img src={TGS_SVGS[cat.tgs]} alt="" style={{ width: 44, height: 44, objectFit: 'contain', alignSelf: 'center', marginBottom: 6 }} />
+                <img src={TGS_SVGS[cat.tgs]} alt="" className="inv-tgs" />
               ) : (
                 <span className="inv-emoji">{cat?.emoji || '🎁'}</span>
               )}
