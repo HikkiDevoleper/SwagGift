@@ -55,7 +55,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
         const cw = getW();
         const target = cw / 2 - stopIndex * STEP - STEP / 2;
 
-        setDur(5.5);
+        setDur(6.5);
         setTx(target);
 
         // Haptic escalation
@@ -71,7 +71,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
           tg?.HapticFeedback?.notificationOccurred?.('success');
           busy.current = false;
           onSpinEnd(winner);
-        }, 5900);
+        }, 6800);
       });
     });
   }, [isSpinning, winner]);
@@ -87,7 +87,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
         className="reel-track"
         style={{
           transform: `translateX(${tx}px)`,
-          transition: dur > 0 ? `transform ${dur}s cubic-bezier(0.08, 0.82, 0.17, 1)` : 'none',
+          transition: dur > 0 ? `transform ${dur}s cubic-bezier(0.02, 0.95, 0.05, 1)` : 'none',
         }}
       >
         {reel.map((item, i) => (

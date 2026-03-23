@@ -10,10 +10,9 @@ interface Props {
   className?: string;
 }
 
-/**
- * Renders a Telegram .tgs sticker (gzipped Lottie JSON).
- * Falls back to nothing if loading fails.
- */
+// Global cache for parsed TGS JSON to prevent massive lag during roulette generation
+const _jsonCache = new Map<string, Promise<any>>();
+
 export const TgsPlayer: React.FC<Props> = ({
   src, size = 120, loop = true, autoplay = true, className,
 }) => {
@@ -26,15 +25,20 @@ export const TgsPlayer: React.FC<Props> = ({
 
     const load = async () => {
       try {
-        const resp = await fetch(src);
-        const buf = await resp.arrayBuffer();
-        const json = JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' }));
+        let jsonPromise = _jsonCache.get(src);
+        if (!jsonPromise) {
+          jsonPromise = fetch(src)
+            .then(r => r.arrayBuffer())
+            .then(buf => JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' })));
+          _jsonCache.set(src, jsonPromise);
+        }
 
+        const json = await jsonPromise;
         if (cancelled || !ref.current) return;
 
         animRef.current = lottie.loadAnimation({
           container: ref.current,
-          renderer: 'svg',
+          renderer: 'canvas', // canvas is much faster for many instances
           loop,
           autoplay,
           animationData: json,
@@ -44,7 +48,7 @@ export const TgsPlayer: React.FC<Props> = ({
           animRef.current.goToAndStop(0, true);
         }
       } catch {
-        // Silently fail — emoji fallback is in parent
+        // Silently fail
       }
     };
 
