@@ -124,33 +124,45 @@ async def bootstrap_api(request: Request) -> JSONResponse:
         },
         "prizes_catalog": PRIZES,
         "flags": flags,
-        "leaderboard": await db.leaderboard(15),
-        "history": await db.get_global_history(20),
-        "stats": {
-            "total_users": await db.total_users(),
-            "total_spins": await db.total_spins(),
-            "total_stars": await db.total_stars(),
-            "wins_today": await db.wins_today(),
-        }
+        "leaderboard": await db.leaderboard(8),
+        "history": await db.get_global_history(12),
     })
 
 
 @app.get("/api/user")
 async def get_user_api(request: Request) -> JSONResponse:
     user = await get_telegram_user(request)
-    uid = user["id"]
-    data = await db.get_user(uid)
-    prizes = await db.get_prizes(uid, 100)
-    free_used = await db.has_used_free(uid)
+    data = await db.get_user(user["id"])
+    prizes = await db.get_prizes(user["id"], 100)
+    free_used = await db.has_used_free(user["id"])
     spin_cost = await runtime_state.get_spin_cost()
 
     return no_store_json({
         "user": data,
         "prizes": prizes,
         "free_used": free_used,
-        "is_owner": uid == OWNER_ID,
+        "is_owner": user["id"] == OWNER_ID,
         "config": {"spin_cost": spin_cost},
     })
+
+
+@app.get("/api/user_brief")
+async def get_user_brief_api(request: Request) -> JSONResponse:
+    user = await get_telegram_user(request)
+    data = await db.get_user(user["id"])
+    free_used = await db.has_used_free(user["id"])
+    return no_store_json(
+        {
+            "user": data,
+            "free_used": free_used,
+            "is_owner": user["id"] == OWNER_ID,
+            "config": {
+                "spin_cost": await runtime_state.get_spin_cost(),
+                "channel_url": CHANNEL_URL,
+                "channel_id": CHANNEL_ID,
+            },
+        }
+    )
 
 
 # ─── Top-Up Balance ─────────────────────────────────

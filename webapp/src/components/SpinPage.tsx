@@ -23,7 +23,7 @@ export const SpinPage: React.FC<Props> = ({
   const cost = boot.config.spin_cost;
 
   return (
-    <div className="page fade-in">
+    <div className="page fade-in" key="spin">
       {/* Top bar */}
       <div className="spin-bar">
         <div className="spin-bar-left">

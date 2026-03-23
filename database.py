@@ -308,7 +308,7 @@ class Database:
                 SELECT p.*, u.first_name, u.username
                 FROM prizes p
                 JOIN users u ON u.user_id = p.user_id
-                WHERE p.is_demo = 0 AND p.prize_key != 'nothing'
+                WHERE p.is_demo = 0
                 ORDER BY p.won_at DESC
                 LIMIT ?
                 """,

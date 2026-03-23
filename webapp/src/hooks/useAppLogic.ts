@@ -15,8 +15,17 @@ export function useAppLogic() {
 
   const refreshUser = useCallback(async () => {
     try {
-      const data = await api<Pick<BootstrapResponse, "user" | "prizes" | "free_used" | "is_owner" | "config">>("user");
+      const data = await api<Pick<BootstrapResponse, "user" | "free_used" | "is_owner" | "config">>("user_brief");
       setBoot((current) => current ? { ...current, ...data } : current);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const refreshPrizes = useCallback(async () => {
+    try {
+      const data = await api<Pick<BootstrapResponse, "prizes">>("user");
+      setBoot((current) => current ? { ...current, prizes: data.prizes } : current);
     } catch (e) {
       console.error(e);
     }
@@ -46,6 +55,7 @@ export function useAppLogic() {
     setLiveConnected,
     toast,
     notify,
-    refreshUser
+    refreshUser,
+    refreshPrizes,
   };
 }

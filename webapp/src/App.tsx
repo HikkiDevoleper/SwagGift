@@ -21,7 +21,7 @@ const IcUser = () => (<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><pa
 export const App: React.FC = () => {
   const {
     boot, setBoot, activeScreen, setActiveScreen,
-    liveConnected, setLiveConnected, notify, refreshUser, toast,
+    liveConnected, setLiveConnected, notify, refreshUser, refreshPrizes, toast,
   } = useAppLogic();
 
   const [spinning, setSpinning] = useState(false);
@@ -31,6 +31,20 @@ export const App: React.FC = () => {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
   const spinRef = useRef(false);
+  const suppressOwnWinsSince = useRef<string | null>(null);
+
+  /* ── Preload gift TGS once (reduces lag and repeated fetch/parse) ── */
+  useEffect(() => {
+    if (!boot?.prizes_catalog?.length) return;
+    const list = boot.prizes_catalog
+      .map(p => p.tgs)
+      .filter((tgs): tgs is string => !!tgs)
+      .slice(0, 40);
+    for (const tgs of list) {
+      // browser cache warm-up
+      fetch(`/gifts/${tgs}`).catch(() => {});
+    }
+  }, [!!boot]);
 
   /* ── SSE: always live (ticker is always visible, shows everyone's wins) ── */
   useEffect(() => {
@@ -80,16 +94,23 @@ export const App: React.FC = () => {
   /* ── Actions ── */
   const doSpin = async () => {
     if (spinning) return;
+    suppressOwnWinsSince.current = new Date().toISOString();
     if (isDemo) {
       try {
         const r = await api<{ winner: Prize; prize_id: number }>('demo_spin', 'POST');
-        if (r.winner) { setWinner(r.winner); setWonPrizeId(r.prize_id); spinRef.current = true; setSpinning(true); }
+        if (r.winner) {
+          setWinner(r.winner);
+          setWonPrizeId(r.prize_id);
+          spinRef.current = true;
+          setSpinning(true);
+        }
       } catch (e: any) { notify(e.message || 'Ошибка'); }
       return;
     }
     try {
       const r = await api<{ winner?: Prize; prize_id?: number; balance?: number; error?: string; spin_cost?: number }>('spin', 'POST');
       if (r.error === 'insufficient_balance') {
+        suppressOwnWinsSince.current = null;
         notify(`Нужно ${r.spin_cost} ⭐, у вас ${r.balance}`);
         setShowTopup(true);
         return;
@@ -101,20 +122,39 @@ export const App: React.FC = () => {
         spinRef.current = true;
         setSpinning(true);
       }
-    } catch (e: any) { notify(e.message || 'Ошибка'); }
+      else {
+        suppressOwnWinsSince.current = null;
+      }
+    } catch (e: any) {
+      suppressOwnWinsSince.current = null;
+      notify(e.message || 'Ошибка');
+    }
   };
 
   const doFree = async () => {
     if (spinning || boot.free_used) return;
+    suppressOwnWinsSince.current = new Date().toISOString();
     try {
       const r = await api<{ winner?: Prize; prize_id?: number; error?: string; channel_url?: string }>('free_spin', 'POST');
-      if (r.winner) { setWinner(r.winner); setWonPrizeId(r.prize_id || 0); spinRef.current = true; setSpinning(true); }
+      if (r.winner) {
+        setWinner(r.winner);
+        setWonPrizeId(r.prize_id || 0);
+        spinRef.current = true;
+        setSpinning(true);
+      }
       else if (r.error === 'not_subscribed') {
+        suppressOwnWinsSince.current = null;
         tg?.showConfirm('Подпишитесь на @SwagGiftChannel для бесплатного спина', (ok: boolean) => {
           if (ok) tg?.openLink(r.channel_url || boot.config.channel_url);
         });
       } else if (r.error === 'already_used') { notify('Шанс использован'); refreshUser(); }
-    } catch (e: any) { notify(e.message || 'Ошибка'); }
+      else {
+        suppressOwnWinsSince.current = null;
+      }
+    } catch (e: any) {
+      suppressOwnWinsSince.current = null;
+      notify(e.message || 'Ошибка');
+    }
   };
 
   const doTopup = async (amount: number) => {
@@ -143,6 +183,7 @@ export const App: React.FC = () => {
 
   const onSpinEnd = (won: Prize) => {
     spinRef.current = false;
+    suppressOwnWinsSince.current = null;
     setSpinning(false);
     if (won.type !== 'nothing') setShowRes(true);
     else notify('Пусто — повезёт в следующий раз');
@@ -153,6 +194,8 @@ export const App: React.FC = () => {
     if (!winner || wonPrizeId <= 0) return;
     await doSell(wonPrizeId, winner.key);
     setShowRes(false);
+    // Inventory changed; refresh just prizes list once
+    refreshPrizes();
   };
 
   const toggleFlag = async (k: keyof RuntimeFlags) => {
@@ -191,13 +234,23 @@ export const App: React.FC = () => {
       <div className="scroll">
         {activeScreen === 'spin' && (
           <SpinPage
-            boot={boot} spinning={spinning} winner={winner} isDemo={isDemo}
+            boot={{
+              ...boot,
+              history: boot.history.filter(h => {
+                // hide own win from ticker until spin end (SSE can arrive earlier)
+                const sup = suppressOwnWinsSince.current;
+                if (!sup) return true;
+                const isMe = h.username && boot.user.username && h.username === boot.user.username;
+                return !(isMe && h.won_at >= sup);
+              }),
+            }}
+            spinning={spinning} winner={winner} isDemo={isDemo}
             onSpin={doSpin} onFreeSpin={doFree} onSpinEnd={onSpinEnd}
             onTopup={() => setShowTopup(true)}
           />
         )}
         {activeScreen === 'inventory' && (
-          <InventoryPage prizes={boot.prizes} catalog={boot.prizes_catalog} onSell={doSell} onWithdraw={doWithdraw} />
+          <InventoryPage prizes={boot.prizes} catalog={boot.prizes_catalog} onSell={doSell} onWithdraw={doWithdraw} refreshPrizes={refreshPrizes} />
         )}
         {activeScreen === 'top' && <LeaderboardPage rows={boot.leaderboard} />}
         {activeScreen === 'profile' && (
