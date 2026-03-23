@@ -1,6 +1,51 @@
 import React, { useRef, useEffect } from 'react';
 import lottie, { type AnimationItem } from 'lottie-web';
 import pako from 'pako';
+import { type Prize } from '../types';
+
+export const TGS_SVGS: Record<string, string> = {};
+
+/**
+ * Preloads all .tgs stickers from the catalog, renders their first frame
+ * to a hidden container, and extracts the raw SVG as a base64 Data URI.
+ * This guarantees 0% CPU usage and instant loading in large lists/roulette.
+ */
+export async function preloadTgs(prizes: Prize[]) {
+  const promises = prizes.filter(p => p.tgs).map(async p => {
+    if (TGS_SVGS[p.tgs!]) return;
+    try {
+      const resp = await fetch(`/gifts/${p.tgs}`);
+      const buf = await resp.arrayBuffer();
+      const json = JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' }));
+
+      const container = document.createElement('div');
+      container.style.width = '120px';
+      container.style.height = '120px';
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      document.body.appendChild(container);
+
+      const anim = lottie.loadAnimation({
+        container, renderer: 'svg', loop: false, autoplay: false, animationData: json,
+      });
+
+      anim.goToAndStop(0, true);
+      await new Promise(r => setTimeout(r, 20)); // tiny delay for render
+
+      const svgStr = container.innerHTML;
+      TGS_SVGS[p.tgs!] = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+
+      anim.destroy();
+      document.body.removeChild(container);
+    } catch (e) {
+      console.error('Failed to preload TGS', p.tgs, e);
+    }
+  });
+  await Promise.all(promises);
+}
+
+// Global cache for actual parsed JSONs for animated players
+const _jsonCache = new Map<string, Promise<any>>();
 
 interface Props {
   src: string;
@@ -9,9 +54,6 @@ interface Props {
   autoplay?: boolean;
   className?: string;
 }
-
-// Global cache for parsed TGS JSON to prevent massive lag during roulette generation
-const _jsonCache = new Map<string, Promise<any>>();
 
 export const TgsPlayer: React.FC<Props> = ({
   src, size = 120, loop = true, autoplay = true, className,
@@ -38,7 +80,7 @@ export const TgsPlayer: React.FC<Props> = ({
 
         animRef.current = lottie.loadAnimation({
           container: ref.current,
-          renderer: 'canvas', // canvas is much faster for many instances
+          renderer: 'canvas',
           loop,
           autoplay,
           animationData: json,
@@ -47,9 +89,7 @@ export const TgsPlayer: React.FC<Props> = ({
         if (!autoplay && animRef.current) {
           animRef.current.goToAndStop(0, true);
         }
-      } catch {
-        // Silently fail
-      }
+      } catch {}
     };
 
     load();
@@ -60,11 +100,6 @@ export const TgsPlayer: React.FC<Props> = ({
     };
   }, [src, loop, autoplay]);
 
-  return (
-    <div
-      ref={ref}
-      className={className}
-      style={{ width: size, height: size }}
-    />
-  );
+  return <div ref={ref} className={className} style={{ width: size, height: size }} />;
 };
+

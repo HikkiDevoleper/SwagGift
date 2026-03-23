@@ -50,7 +50,7 @@ export const SpinPage: React.FC<Props> = ({
       </div>
 
       {/* Recent wins — always visible, never hidden */}
-      <WinsTicker history={boot.history} catalog={boot.prizes_catalog} />
+      <WinsTicker history={boot.history} catalog={boot.prizes_catalog} spinning={spinning} userId={boot.user.user_id} />
     </div>
   );
 };

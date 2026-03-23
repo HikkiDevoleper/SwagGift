@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn, formatDate } from '../utils';
 import { type InventoryItem, type Prize } from '../types';
-import { TgsPlayer } from './TgsPlayer';
+import { TGS_SVGS } from './TgsPlayer';
 
 interface Props {
   prizes: InventoryItem[];
@@ -23,10 +23,8 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
           const isW = item.status === 'withdrawing';
           return (
             <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} style={{ animationDelay: `${i * 35}ms` }}>
-              {cat?.tgs ? (
-                <div style={{ alignSelf: 'center', marginBottom: 6 }}>
-                  <TgsPlayer src={`/gifts/${cat.tgs}`} size={44} autoplay={false} />
-                </div>
+              {cat?.tgs && TGS_SVGS[cat.tgs] ? (
+                <img src={TGS_SVGS[cat.tgs]} alt="" style={{ width: 44, height: 44, objectFit: 'contain', alignSelf: 'center', marginBottom: 6 }} />
               ) : (
                 <span className="inv-emoji">{cat?.emoji || '🎁'}</span>
               )}

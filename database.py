@@ -305,7 +305,7 @@ class Database:
         async with self._connection() as db:
             async with db.execute(
                 """
-                SELECT p.*, u.first_name, u.username
+                SELECT p.*, u.first_name, u.username, p.user_id
                 FROM prizes p
                 JOIN users u ON u.user_id = p.user_id
                 WHERE p.is_demo = 0
@@ -314,7 +314,23 @@ class Database:
                 """,
                 (limit,),
             ) as cur:
-                return [dict(row) for row in await cur.fetchall()]
+                rows = await cur.fetchall()
+                return [
+                    {
+                        "id": row["id"],
+                        "key": row["prize_key"],
+                        "name": row["prize_name"],
+                        "rarity": row["rarity"],
+                        "demo": bool(row["is_demo"]),
+                        "free": bool(row["is_free"]),
+                        "date": row["won_at"],
+                        "status": row["status"],
+                        "first_name": row["first_name"],
+                        "username": row["username"],
+                        "user_id": row["user_id"],
+                    }
+                    for row in rows
+                ]
 
     async def get_payment(self, charge_id: str) -> Optional[Dict[str, Any]]:
         async with self._connection() as db:
