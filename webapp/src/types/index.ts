@@ -51,7 +51,6 @@ export type HistoryRow = {
   won_at: string;
   first_name: string;
   username: string;
-  user_id: number;
 };
 
 export type RuntimeFlags = {
@@ -69,11 +68,18 @@ export type BootstrapResponse = {
   config: {
     spin_cost: number;
     channel_url: string;
+    channel_id: string;
   };
   prizes_catalog: Prize[];
   flags: RuntimeFlags;
   leaderboard: LeaderboardRow[];
   history: HistoryRow[];
+  stats: {
+    total_users: number;
+    total_spins: number;
+    total_stars: number;
+    wins_today: number;
+  };
 };
 
 export type LiveData = {

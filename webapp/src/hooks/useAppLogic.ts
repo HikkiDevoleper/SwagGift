@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { type BootstrapResponse, type ScreenKey } from "../types";
 import { api, tg } from "../utils";
-import { preloadTgs } from "../components/TgsPlayer";
 
 export function useAppLogic() {
   const [boot, setBoot] = useState<BootstrapResponse | null>(null);
@@ -30,7 +29,6 @@ export function useAppLogic() {
     const load = async () => {
       try {
         const data = await api<BootstrapResponse>("bootstrap");
-        await preloadTgs(data.prizes_catalog);
         setBoot(data);
       } catch (error) {
         notify("Ошибка загрузки данных");

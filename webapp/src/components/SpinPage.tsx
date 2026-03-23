@@ -23,7 +23,7 @@ export const SpinPage: React.FC<Props> = ({
   const cost = boot.config.spin_cost;
 
   return (
-    <div className="page fade-in" key="spin">
+    <div className="page fade-in">
       {/* Top bar */}
       <div className="spin-bar">
         <div className="spin-bar-left">
@@ -50,7 +50,7 @@ export const SpinPage: React.FC<Props> = ({
       </div>
 
       {/* Recent wins — always visible, never hidden */}
-      <WinsTicker history={boot.history} catalog={boot.prizes_catalog} spinning={spinning} userId={boot.user.user_id} />
+      <WinsTicker history={boot.history} catalog={boot.prizes_catalog} />
     </div>
   );
 };

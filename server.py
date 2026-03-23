@@ -124,8 +124,14 @@ async def bootstrap_api(request: Request) -> JSONResponse:
         },
         "prizes_catalog": PRIZES,
         "flags": flags,
-        "leaderboard": await db.leaderboard(8),
-        "history": await db.get_global_history(12),
+        "leaderboard": await db.leaderboard(15),
+        "history": await db.get_global_history(20),
+        "stats": {
+            "total_users": await db.total_users(),
+            "total_spins": await db.total_spins(),
+            "total_stars": await db.total_stars(),
+            "wins_today": await db.wins_today(),
+        }
     })
 
 

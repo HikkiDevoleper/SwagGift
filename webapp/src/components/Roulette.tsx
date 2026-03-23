@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { tg, rarityClass, makeReel } from '../utils';
 import { type Prize } from '../types';
-import { TGS_SVGS } from './TgsPlayer';
+import { TgsPlayer } from './TgsPlayer';
 
 const CARD_W = 88;
 const GAP = 8;
@@ -15,9 +15,6 @@ interface Props {
 }
 
 export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
-// ...
-// We just need to replace the bottom map logic 
-// Wait, I will use multi replace to be safe. Let me replace the required part.
   const wrapRef = useRef<HTMLDivElement>(null);
   const [reel, setReel] = useState<Prize[]>([]);
   const [tx, setTx] = useState(0);
@@ -88,21 +85,21 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
       <div className="reel-pointer" />
       <div
         className="reel-track"
-        style={{ '--tx': `${tx}px`, '--dur': dur > 0 ? `${dur}s` : '0s' } as React.CSSProperties}
+        style={{
+          transform: `translateX(${tx}px)`,
+          transition: dur > 0 ? `transform ${dur}s cubic-bezier(0.02, 0.95, 0.05, 1)` : 'none',
+        }}
       >
-        {reel.map((p, i) => {
-          const isWin = isSpinning && winner && i === winIdx; // Use winIdx for current state
-          return (
-            <div key={`${i}-${p.key}`} className={`reel-card r-${rarityClass(p.rarity)} ${isWin ? '--win' : ''}`}>
-              {p.tgs && TGS_SVGS[p.tgs] ? (
-                <img src={TGS_SVGS[p.tgs]} alt="" className="reel-tgs" />
-              ) : (
-                <span className="reel-emoji">{p.emoji}</span>
-              )}
-              <span className="reel-name">{p.name}</span>
-            </div>
-          );
-        })}
+        {reel.map((item, i) => (
+          <div key={`${i}-${item.key}`} className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}>
+            {item.tgs ? (
+              <TgsPlayer src={`/gifts/${item.tgs}`} size={56} autoplay={false} />
+            ) : (
+              <span className="reel-emoji">{item.emoji}</span>
+            )}
+            <span className="reel-name">{item.name}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

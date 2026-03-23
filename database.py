@@ -164,7 +164,6 @@ class Database:
             )
             await db.commit()
             return cur.rowcount > 0
-        return False
 
     async def sell_prize(self, uid: int, prize_id: int, sell_value: int) -> bool:
         """Mark prize as sold, credit balance."""
@@ -192,7 +191,6 @@ class Database:
             )
             await db.commit()
             return cur.rowcount > 0
-        return False
 
     async def is_banned(self, uid: int) -> bool:
         user = await self.get_user(uid)
@@ -307,33 +305,16 @@ class Database:
         async with self._connection() as db:
             async with db.execute(
                 """
-                SELECT p.*, u.first_name, u.username, p.user_id
+                SELECT p.*, u.first_name, u.username
                 FROM prizes p
                 JOIN users u ON u.user_id = p.user_id
-                WHERE p.is_demo = 0
+                WHERE p.is_demo = 0 AND p.prize_key != 'nothing'
                 ORDER BY p.won_at DESC
                 LIMIT ?
                 """,
                 (limit,),
             ) as cur:
-                rows = await cur.fetchall()
-                return [
-                    {
-                        "id": row["id"],
-                        "key": row["prize_key"],
-                        "name": row["prize_name"],
-                        "rarity": row["rarity"],
-                        "demo": bool(row["is_demo"]),
-                        "free": bool(row["is_free"]),
-                        "date": row["won_at"],
-                        "status": row["status"],
-                        "first_name": row["first_name"],
-                        "username": row["username"],
-                        "user_id": row["user_id"],
-                    }
-                    for row in rows
-                ]
-        return []
+                return [dict(row) for row in await cur.fetchall()]
 
     async def get_payment(self, charge_id: str) -> Optional[Dict[str, Any]]:
         async with self._connection() as db:
@@ -360,10 +341,9 @@ class Database:
 
     async def total_users(self) -> int:
         async with self._connection() as db:
-            async with db.execute("SELECT COUNT(id) FROM users") as cur:
+            async with db.execute("SELECT COUNT(*) AS total FROM users") as cur:
                 row = await cur.fetchone()
-                return row[0] if row else 0
-        return 0
+                return int(row["total"]) if row else 0
 
     async def total_spins(self) -> int:
         async with self._connection() as db:

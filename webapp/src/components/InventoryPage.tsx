@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn, formatDate } from '../utils';
 import { type InventoryItem, type Prize } from '../types';
-import { TGS_SVGS } from './TgsPlayer';
+import { TgsPlayer } from './TgsPlayer';
 
 interface Props {
   prizes: InventoryItem[];
@@ -11,10 +11,17 @@ interface Props {
 }
 
 export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWithdraw }) => (
-  <div className="page fade-in" key="inv">
-    <h1 className="pg-title">Мои призы</h1>
+  <div className="page fade-in">
+    <div className="page-header">
+      <h1 className="pg-title">🎁 Мои призы</h1>
+      <p className="pg-subtitle">Ваши выигранные подарки</p>
+    </div>
     {prizes.length === 0 ? (
-      <div className="empty"><div className="empty-icon">📦</div><p>Ещё нет призов</p></div>
+      <div className="empty">
+        <div className="empty-icon">📦</div>
+        <p>Ещё нет призов</p>
+        <p className="empty-sub">Крутите рулетку чтобы выиграть!</p>
+      </div>
     ) : (
       <div className="inv-grid">
         {prizes.map((item, i) => {
@@ -22,9 +29,11 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
           const sv = cat?.sell_value || 0;
           const isW = item.status === 'withdrawing';
           return (
-            <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} style={{ '--delay': `${i * 35}ms` } as React.CSSProperties}>
-              {cat?.tgs && TGS_SVGS[cat.tgs] ? (
-                <img src={TGS_SVGS[cat.tgs]} alt="" className="inv-tgs" />
+            <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} style={{ animationDelay: `${i * 35}ms` }}>
+              {cat?.tgs ? (
+                <div style={{ alignSelf: 'center', marginBottom: 6 }}>
+                  <TgsPlayer src={`/gifts/${cat.tgs}`} size={44} autoplay={false} />
+                </div>
               ) : (
                 <span className="inv-emoji">{cat?.emoji || '🎁'}</span>
               )}
@@ -35,7 +44,7 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
                 <span className="inv-status">⏳ Выводится…</span>
               ) : item.key !== 'nothing' && (
                 <div className="inv-btns">
-                  <button className="inv-btn" onClick={() => onWithdraw(item.id)}>Вывести</button>
+                  <button className="inv-btn" onClick={() => onWithdraw(item.id)}>Получить</button>
                   <button className="inv-btn inv-btn-sell" onClick={() => onSell(item.id, item.key)}>
                     {sv > 0 ? `${sv} ⭐` : 'Продать'}
                   </button>
