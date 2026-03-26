@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import lottie, { type AnimationItem } from 'lottie-web';
 import pako from 'pako';
 
@@ -8,24 +8,36 @@ interface Props {
   loop?: boolean;
   autoplay?: boolean;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-// Global cache for parsed TGS JSON to prevent massive lag during roulette generation
-const _jsonCache = new Map<string, Promise<any>>();
+// ─── Global cache: src → Promise<object> ───────────────────────
+// Shared across ALL TgsPlayer instances — parse once, reuse forever.
+const _cache = new Map<string, Promise<object>>();
 
-export function preloadTgs(src: string): Promise<any> {
-  let jsonPromise = _jsonCache.get(src);
-  if (!jsonPromise) {
-    jsonPromise = fetch(src)
-      .then(r => r.arrayBuffer())
-      .then(buf => JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' })));
-    _jsonCache.set(src, jsonPromise);
+export function preloadTgs(src: string): Promise<object> {
+  let p = _cache.get(src);
+  if (!p) {
+    p = fetch(src)
+      .then(r => {
+        if (!r.ok) throw new Error(`TGS fetch failed: ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then(buf => {
+        const json = JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' }));
+        // Freeze prevents accidental mutation across instances
+        return Object.freeze(json);
+      });
+    _cache.set(src, p);
   }
-  return jsonPromise;
+  return p;
 }
 
-export const TgsPlayer: React.FC<Props> = ({
-  src, size = 120, loop = true, autoplay = true, className,
+// ─── TgsPlayer ─────────────────────────────────────────────────
+// Uses canvas renderer (4–8× faster than SVG for many instances).
+// Properly sized and clipped — the container is always a tight square.
+export const TgsPlayer: React.FC<Props> = memo(({
+  src, size = 120, loop = true, autoplay = true, className, style,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const animRef = useRef<AnimationItem | null>(null);
@@ -34,35 +46,42 @@ export const TgsPlayer: React.FC<Props> = ({
     if (!ref.current) return;
     let cancelled = false;
 
-    const load = async () => {
+    (async () => {
       try {
         const json = await preloadTgs(src);
         if (cancelled || !ref.current) return;
 
-        // deep clone to avoid lottie modifying global cache
-        const animData = typeof structuredClone === "function" ? structuredClone(json) : JSON.parse(JSON.stringify(json));
+        // Destroy previous if src changed
+        animRef.current?.destroy();
+        animRef.current = null;
 
         animRef.current = lottie.loadAnimation({
           container: ref.current,
-          renderer: 'canvas', // canvas is much faster for many instances
+          renderer: 'canvas',
           loop,
           autoplay,
-          animationData: animData,
+          // Deep-clone the frozen data so lottie can mutate its copy
+          animationData: JSON.parse(JSON.stringify(json)),
+          rendererSettings: {
+            // Clip to container — fixes heart / edge-overflow bugs
+            clearCanvas: true,
+            progressiveLoad: false,
+            hideOnTransparent: true,
+          },
         });
 
-        if (!autoplay && animRef.current) {
+        if (!autoplay) {
           animRef.current.goToAndStop(0, true);
         }
       } catch {
-        // Silently fail
+        // Silently skip broken TGS
       }
-    };
-
-    load();
+    })();
 
     return () => {
       cancelled = true;
       animRef.current?.destroy();
+      animRef.current = null;
     };
   }, [src, loop, autoplay]);
 
@@ -70,7 +89,18 @@ export const TgsPlayer: React.FC<Props> = ({
     <div
       ref={ref}
       className={className}
-      style={{ width: size, height: size }}
+      style={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...style,
+      }}
     />
   );
-};
+});
+
+TgsPlayer.displayName = 'TgsPlayer';

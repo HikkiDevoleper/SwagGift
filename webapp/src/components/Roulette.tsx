@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { tg, rarityClass, makeReel } from '../utils';
 import { type Prize } from '../types';
 import { TgsPlayer } from './TgsPlayer';
 
-const CARD_W = 88;
+const CARD_W = 92;
 const GAP = 8;
 const STEP = CARD_W + GAP;
 
@@ -22,48 +22,58 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
   const [winIdx, setWinIdx] = useState(-1);
   const busy = useRef(false);
 
-  // Helper
-  const getW = () => wrapRef.current?.clientWidth || 300;
+  // Current real-world translateX — survives across spins so we always
+  // continue from wherever the reel stopped (no snap-to-start).
+  const currentTx = useRef(0);
 
-  // INIT
+  const getW = () => wrapRef.current?.clientWidth || 320;
+
+  // Build initial reel once — no transition
   useEffect(() => {
     if (isSpinning || busy.current || !prizes.length) return;
     const { reel: newReel } = makeReel(prizes);
+    const w = getW();
+    const initTx = w / 2 - 5 * STEP - STEP / 2;
     setReel(newReel);
     setWinIdx(-1);
     setDur(0);
-    // No CSS padding! Center card 5 purely via translateX:
-    setTx(getW() / 2 - 5 * STEP - STEP / 2);
+    setTx(initTx);
+    currentTx.current = initTx;
   }, [prizes]);
 
-  // SPIN
+  // Spin effect
   useEffect(() => {
     if (!isSpinning || !winner || busy.current) return;
     busy.current = true;
 
     const { reel: newReel, stopIndex } = makeReel(prizes, winner);
+    const w = getW();
 
-    // 1) Reset: no transition, snap to start of reel
-    setWinIdx(-1);
-    setDur(0);
+    // Place new reel so card-0 is exactly where the reel currently sits
+    // visually — then animate forward to the winner card.
+    // We do NOT snap to start; we compute how far we still need to travel.
+    const target = w / 2 - stopIndex * STEP - STEP / 2;
+
     setReel(newReel);
-    setTx(getW() / 2 - STEP / 2); // card 0 centered
+    setWinIdx(-1);
 
-    // 2) After browser paints the reset, animate to winner
+    // Apply the new reel without transition at current visual position
+    setDur(0);
+    setTx(currentTx.current);
+
+    // One rAF pair is enough to flush the no-transition paint
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const cw = getW();
-        const target = cw / 2 - stopIndex * STEP - STEP / 2;
-
-        setDur(6.5);
+        setDur(5.8);
         setTx(target);
+        currentTx.current = target;
 
         // Haptic escalation
         let t = 0;
         const hap = setInterval(() => {
           t++;
-          tg?.HapticFeedback?.impactOccurred?.(t < 20 ? 'light' : t < 40 ? 'medium' : 'heavy');
-        }, 120);
+          tg?.HapticFeedback?.impactOccurred?.(t < 18 ? 'light' : t < 36 ? 'medium' : 'heavy');
+        }, 110);
 
         setTimeout(() => {
           clearInterval(hap);
@@ -71,7 +81,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
           tg?.HapticFeedback?.notificationOccurred?.('success');
           busy.current = false;
           onSpinEnd(winner);
-        }, 6800);
+        }, 6000);
       });
     });
   }, [isSpinning, winner]);
@@ -87,18 +97,30 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
         className="reel-track"
         style={{
           transform: `translateX(${tx}px)`,
-          transition: dur > 0 ? `transform ${dur}s cubic-bezier(0.02, 0.95, 0.05, 1)` : 'none',
+          transition: dur > 0
+            ? `transform ${dur}s cubic-bezier(0.02, 0.96, 0.01, 1)`
+            : 'none',
         }}
       >
         {reel.map((item, i) => (
-          <div key={`${i}-${item.key}`} className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}>
-            <div className="card-price">{item.sell_value}★</div>
+          <div
+            key={`${i}-${item.key}`}
+            className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}
+          >
             {item.tgs ? (
-              <TgsPlayer src={`/gifts/${item.tgs}`} size={56} autoplay={false} />
+              <TgsPlayer
+                src={`/gifts/${item.tgs}`}
+                size={54}
+                autoplay={false}
+                loop={false}
+              />
             ) : (
               <span className="reel-emoji">{item.emoji}</span>
             )}
             <span className="reel-name">{item.name}</span>
+            {item.sell_value > 0 && (
+              <span className="reel-price">{item.sell_value}★</span>
+            )}
           </div>
         ))}
       </div>

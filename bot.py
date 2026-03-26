@@ -194,8 +194,8 @@ async def guard_middleware(handler, event: types.Update, data: dict):
     flags = await get_runtime_flags()
     if flags["maint"]:
         text = (
-            "<b>Swagging Gift временно недоступен</b>\n\n"
-            "Сейчас идут технические работы. Попробуйте чуть позже."
+            "<b>Swag Gift — технический перерыв</b>\n\n"
+            "Уже чиним. Скоро крутим снова 🔧"
         )
         if event.message:
             await event.message.answer(text)
@@ -211,20 +211,20 @@ async def cmd_start(message: Message) -> None:
     user = message.from_user
     await db.ensure_user(user.id, user.username or "", user.first_name or "")
 
-    # Inline keyboard with WebApp button matching screenshot design
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="🎰 Играть в рулетку",
+            text="🎰 Запустить Swag Gift",
             web_app=WebAppInfo(url=WEBAPP_URL)
         )
     )
 
     await message.answer(
         (
-            "🎁 <b>Swagging Gift</b>\n\n"
-            "Крутите барабан и выигрывайте настоящие Telegram-подарки!\n\n"
-            "Жмите кнопку ниже чтобы открыть приложение 👇"
+            f"🎁 <b>Swag Gift</b>\n\n"
+            f"Настоящие Telegram-подарки. Реальные шансы. Без воды.\n\n"
+            f"Крути барабан → выигрывай → забирай.\n"
+            f"<i>Один бесплатный спин уже ждёт тебя.</i>"
         ),
         reply_markup=builder.as_markup(),
     )

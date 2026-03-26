@@ -42,6 +42,7 @@ export type LeaderboardRow = {
   spins: number;
   wins: number;
   stars_spent: number;
+  photo_url?: string | null;
 };
 
 export type HistoryRow = {
