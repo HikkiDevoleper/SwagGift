@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { tg, rarityClass, makeReel } from '../utils';
+import React, { useState, useEffect, useRef } from 'react';
+import { tg, rarityClass } from '../utils';
 import { type Prize } from '../types';
 import { TgsPlayer } from './TgsPlayer';
 
@@ -14,6 +14,8 @@ interface Props {
   onSpinEnd: (p: Prize) => void;
 }
 
+const getRandomItem = (arr: Prize[]) => arr[Math.floor(Math.random() * arr.length)];
+
 export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [reel, setReel] = useState<Prize[]>([]);
@@ -22,23 +24,22 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
   const [winIdx, setWinIdx] = useState(-1);
   const busy = useRef(false);
 
-  // Current real-world translateX — survives across spins so we always
-  // continue from wherever the reel stopped (no snap-to-start).
-  const currentTx = useRef(0);
+  // Track the absolute stopping index across multiple spins
+  const lastStopRef = useRef(0);
 
   const getW = () => wrapRef.current?.clientWidth || 320;
 
-  // Build initial reel once — no transition
+  // Initialize reel once
   useEffect(() => {
-    if (isSpinning || busy.current || !prizes.length) return;
-    const { reel: newReel } = makeReel(prizes);
-    const w = getW();
-    const initTx = w / 2 - 5 * STEP - STEP / 2;
-    setReel(newReel);
-    setWinIdx(-1);
+    if (isSpinning || busy.current || !prizes.length || reel.length > 0) return;
+    const initialItems = Array.from({ length: 15 }, () => getRandomItem(prizes));
+    setReel(initialItems);
     setDur(0);
+    // 3 items offset visually initially
+    const initTx = getW() / 2 - 3 * STEP - STEP / 2;
     setTx(initTx);
-    currentTx.current = initTx;
+    lastStopRef.current = 3;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prizes]);
 
   // Spin effect
@@ -46,49 +47,50 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
     if (!isSpinning || !winner || busy.current) return;
     busy.current = true;
 
-    const { reel: newReel, stopIndex } = makeReel(prizes, winner);
-    const w = getW();
+    // We want to travel ~40 cards forward from the current stop index
+    const travelDistance = 38 + Math.floor(Math.random() * 5); // 38..42
+    const targetStop = lastStopRef.current + travelDistance;
 
-    // Place new reel so card-0 is exactly where the reel currently sits
-    // visually — then animate forward to the winner card.
-    // We do NOT snap to start; we compute how far we still need to travel.
-    const target = w / 2 - stopIndex * STEP - STEP / 2;
-
-    setReel(newReel);
-    setWinIdx(-1);
-
-    // Apply the new reel without transition at current visual position
-    setDur(0);
-    setTx(currentTx.current);
-
-    // One rAF pair is enough to flush the no-transition paint
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setDur(5.8);
-        setTx(target);
-        currentTx.current = target;
-
-        // Haptic escalation
-        let t = 0;
-        const hap = setInterval(() => {
-          t++;
-          tg?.HapticFeedback?.impactOccurred?.(t < 18 ? 'light' : t < 36 ? 'medium' : 'heavy');
-        }, 110);
-
-        setTimeout(() => {
-          clearInterval(hap);
-          setWinIdx(stopIndex);
-          tg?.HapticFeedback?.notificationOccurred?.('success');
-          busy.current = false;
-          onSpinEnd(winner);
-        }, 6000);
+    // Pad the reel up to targetStop + 10 items (so it doesn't look empty at the end)
+    setReel(prev => {
+      const needed = targetStop + 10 - prev.length;
+      const extra = Array.from({ length: Math.max(0, needed) }, (_, i) => {
+        // Drop the winner exactly at targetStop
+        if (prev.length + i === targetStop) return winner;
+        return getRandomItem(prizes);
       });
+      return [...prev, ...extra];
     });
-  }, [isSpinning, winner]);
 
-  useEffect(() => {
-    if (!isSpinning) busy.current = false;
-  }, [isSpinning]);
+    setWinIdx(-1);
+    
+    // Animate to new target
+    const targetTx = getW() / 2 - targetStop * STEP - STEP / 2;
+    
+    // Small timeout to ensure DOM paints the new reel items before transitioning
+    setTimeout(() => {
+      setDur(5.8);
+      setTx(targetTx);
+      lastStopRef.current = targetStop;
+
+      // Haptic escalation
+      let t = 0;
+      const hap = setInterval(() => {
+        t++;
+        tg?.HapticFeedback?.impactOccurred?.(t < 18 ? 'light' : t < 36 ? 'medium' : 'heavy');
+      }, 110);
+
+      setTimeout(() => {
+        clearInterval(hap);
+        setWinIdx(targetStop);
+        tg?.HapticFeedback?.notificationOccurred?.('success');
+        busy.current = false;
+        onSpinEnd(winner);
+      }, 6000);
+    }, 50);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpinning, winner]);
 
   return (
     <div className="reel-wrap" ref={wrapRef}>

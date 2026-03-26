@@ -13,9 +13,9 @@ interface Props {
 
 // ─── Global cache: src → Promise<object> ───────────────────────
 // Shared across ALL TgsPlayer instances — parse once, reuse forever.
-const _cache = new Map<string, Promise<object>>();
+const _cache = new Map<string, Promise<string>>();
 
-export function preloadTgs(src: string): Promise<object> {
+export function preloadTgs(src: string): Promise<string> {
   let p = _cache.get(src);
   if (!p) {
     p = fetch(src)
@@ -24,9 +24,8 @@ export function preloadTgs(src: string): Promise<object> {
         return r.arrayBuffer();
       })
       .then(buf => {
-        const json = JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' }));
-        // Freeze prevents accidental mutation across instances
-        return Object.freeze(json);
+        const jsonString = pako.inflate(new Uint8Array(buf), { to: 'string' });
+        return jsonString;
       });
     _cache.set(src, p);
   }
@@ -48,7 +47,7 @@ export const TgsPlayer: React.FC<Props> = memo(({
 
     (async () => {
       try {
-        const json = await preloadTgs(src);
+        const jsonString = await preloadTgs(src);
         if (cancelled || !ref.current) return;
 
         // Destroy previous if src changed
@@ -57,16 +56,13 @@ export const TgsPlayer: React.FC<Props> = memo(({
 
         animRef.current = lottie.loadAnimation({
           container: ref.current,
-          renderer: 'canvas',
+          renderer: 'svg',
           loop,
           autoplay,
-          // Deep-clone the frozen data so lottie can mutate its copy
-          animationData: JSON.parse(JSON.stringify(json)),
+          // Parse string directly to a new object for lottie
+          animationData: JSON.parse(jsonString),
           rendererSettings: {
-            // Clip to container — fixes heart / edge-overflow bugs
-            clearCanvas: true,
             progressiveLoad: false,
-            hideOnTransparent: true,
           },
         });
 

@@ -3,7 +3,7 @@ import { cn, formatDate, rarityClass } from '../utils';
 import { type InventoryItem, type Prize } from '../types';
 import { TgsPlayer } from './TgsPlayer';
 
-type Filter = 'all' | 'active' | 'sold';
+type Filter = 'all' | 'withdrawing' | 'sold';
 
 interface Props {
   prizes: InventoryItem[];
@@ -17,14 +17,14 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = prizes.filter(item => {
-    if (filter === 'active') return item.status === 'active';
-    if (filter === 'sold')   return item.status === 'sold';
+    if (filter === 'withdrawing') return item.status === 'withdrawing';
+    if (filter === 'sold')        return item.status === 'sold';
     return true;
   });
 
   const counts = {
     all: prizes.length,
-    active: prizes.filter(p => p.status === 'active').length,
+    withdrawing: prizes.filter(p => p.status === 'withdrawing').length,
     sold: prizes.filter(p => p.status === 'sold').length,
   };
 
@@ -37,13 +37,13 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
 
       {/* Filter tabs */}
       <div className="inv-tabs">
-        {(['all', 'active', 'sold'] as Filter[]).map(f => (
+        {(['all', 'withdrawing', 'sold'] as Filter[]).map(f => (
           <button
             key={f}
             className={cn('inv-tab', filter === f && 'on')}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? 'Все' : f === 'active' ? 'Активные' : 'Проданные'}
+            {f === 'all' ? 'Все' : f === 'withdrawing' ? 'На выводе' : 'Продано'}
             <span className="inv-tab-cnt">{counts[f]}</span>
           </button>
         ))}

@@ -34,7 +34,6 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
               <div className="pod-medal">🥈</div>
               <div className="pod-name">{rows[1].first_name || rows[1].username || 'Игрок'}</div>
               <div className="pod-wins">{rows[1].wins} 🎁</div>
-              <div className="pod-bar pod-bar-2" />
             </div>
           ) : <div className="podium-slot podium-2 pod-empty" />}
 
@@ -50,7 +49,6 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
             <div className="pod-medal">🥇</div>
             <div className="pod-name">{rows[0].first_name || rows[0].username || 'Игрок'}</div>
             <div className="pod-wins">{rows[0].wins} 🎁</div>
-            <div className="pod-bar pod-bar-1" />
           </div>
 
           {/* 3rd */}
@@ -65,7 +63,6 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
               <div className="pod-medal">🥉</div>
               <div className="pod-name">{rows[2].first_name || rows[2].username || 'Игрок'}</div>
               <div className="pod-wins">{rows[2].wins} 🎁</div>
-              <div className="pod-bar pod-bar-3" />
             </div>
           ) : <div className="podium-slot podium-3 pod-empty" />}
         </div>

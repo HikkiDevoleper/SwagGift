@@ -43,19 +43,6 @@ export const SpinPage: React.FC<Props> = ({
 
       {/* ── Roulette card ── */}
       <div className="card roulette-card">
-        {/* Prize catalog preview strip */}
-        <div className="catalog-strip">
-          {boot.prizes_catalog.filter(p => p.type !== 'nothing').slice(0, 5).map(p => (
-            <div key={p.key} className="catalog-chip">
-              <span className="catalog-chip-emoji">{p.emoji}</span>
-              <span className="catalog-chip-price">{p.sell_value}★</span>
-            </div>
-          ))}
-          <div className="catalog-chip catalog-chip-more">
-            <span className="catalog-chip-emoji">+{boot.prizes_catalog.filter(p => p.type !== 'nothing').length - 5}</span>
-          </div>
-        </div>
-
         <Roulette
           prizes={boot.prizes_catalog}
           isSpinning={spinning}
