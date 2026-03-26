@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import lottie, { type AnimationItem } from 'lottie-web';
 import pako from 'pako';
 
@@ -29,9 +29,25 @@ export const TgsPlayer: React.FC<Props> = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const animRef = useRef<AnimationItem | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     if (!ref.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible || !ref.current) return;
     let cancelled = false;
 
     const load = async () => {
@@ -61,7 +77,7 @@ export const TgsPlayer: React.FC<Props> = ({
       cancelled = true;
       animRef.current?.destroy();
     };
-  }, [src, loop, autoplay]);
+  }, [src, loop, autoplay, isVisible]);
 
   return (
     <div

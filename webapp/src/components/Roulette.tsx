@@ -92,6 +92,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
       >
         {reel.map((item, i) => (
           <div key={`${i}-${item.key}`} className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}>
+            {item.sell_value > 0 && <span className="reel-price">{item.sell_value}★</span>}
             {item.tgs ? (
               <TgsPlayer src={`/gifts/${item.tgs}`} size={56} autoplay={false} />
             ) : (
