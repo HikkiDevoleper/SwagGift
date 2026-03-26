@@ -25,6 +25,7 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
             const isW = item.status === 'withdrawing';
             return (
               <div key={item.id || i} className={cn('inv-item', isW && 'withdrawing')} style={{ animationDelay: `${i * 35}ms` }}>
+                <div className="inv-price">{sv}★</div>
                 {cat?.tgs ? (
                   <div style={{ alignSelf: 'center', marginBottom: 6 }}>
                     <TgsPlayer src={`/gifts/${cat.tgs}`} size={44} autoplay={false} />

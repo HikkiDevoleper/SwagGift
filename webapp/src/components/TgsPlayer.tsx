@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import lottie, { type AnimationItem } from 'lottie-web';
 import pako from 'pako';
 
@@ -29,25 +29,9 @@ export const TgsPlayer: React.FC<Props> = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const animRef = useRef<AnimationItem | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     if (!ref.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '200px' }
-    );
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!isVisible || !ref.current) return;
     let cancelled = false;
 
     const load = async () => {
@@ -55,12 +39,15 @@ export const TgsPlayer: React.FC<Props> = ({
         const json = await preloadTgs(src);
         if (cancelled || !ref.current) return;
 
+        // deep clone to avoid lottie modifying global cache
+        const animData = typeof structuredClone === "function" ? structuredClone(json) : JSON.parse(JSON.stringify(json));
+
         animRef.current = lottie.loadAnimation({
           container: ref.current,
           renderer: 'canvas', // canvas is much faster for many instances
           loop,
           autoplay,
-          animationData: json,
+          animationData: animData,
         });
 
         if (!autoplay && animRef.current) {
@@ -77,7 +64,7 @@ export const TgsPlayer: React.FC<Props> = ({
       cancelled = true;
       animRef.current?.destroy();
     };
-  }, [src, loop, autoplay, isVisible]);
+  }, [src, loop, autoplay]);
 
   return (
     <div

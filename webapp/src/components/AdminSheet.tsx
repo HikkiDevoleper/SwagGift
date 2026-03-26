@@ -116,7 +116,7 @@ export const AdminSheet: React.FC<Props> = ({
             ) : (
               <span className="wt-emoji">{p.emoji}</span>
             )}
-            <span className="wt-name">{p.name}</span>
+            <span className="wt-name">{p.name} {p.sell_value > 0 ? `(${p.sell_value}★)` : ''}</span>
             <span className="wt-pct">{total > 0 ? ((weights[p.key] / total) * 100).toFixed(0) : 0}%</span>
             <input
               className="wt-input"
