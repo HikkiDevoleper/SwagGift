@@ -67,7 +67,8 @@ def verify_init_data(init_data_raw: str, bot_token: str) -> Dict[str, Any]:
 async def get_telegram_user(request: Request) -> Dict[str, Any]:
     init_data = request.headers.get("X-Telegram-Init-Data", "")
     user = verify_init_data(init_data, TOKEN)
-    await db.ensure_user(user["id"], user.get("username", ""), user.get("first_name", ""))
+    photo_url = user.get("photo_url", "")
+    await db.ensure_user(user["id"], user.get("username", ""), user.get("first_name", ""), photo_url)
     return user
 
 

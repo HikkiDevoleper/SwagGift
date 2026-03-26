@@ -177,14 +177,14 @@ export const App: React.FC = () => {
   const doSell = async (prizeId: number, prizeKey: string) => {
     try {
       const r = await api<{ ok: boolean; sell_value: number; balance: number }>('sell', 'POST', { prize_id: prizeId, prize_key: prizeKey });
-      if (r.ok) { notify(`+${r.sell_value} ⭐`); setBoot(p => p ? { ...p, user: { ...p.user, balance: r.balance } } : p); refreshUser(); }
+      if (r.ok) { notify(`+${r.sell_value} ⭐`); setBoot(p => p ? { ...p, user: { ...p.user, balance: r.balance } } : p); refreshUser(); refreshPrizes(); }
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
   const doWithdraw = async (prizeId: number) => {
     try {
       const r = await api<{ ok: boolean }>('withdraw', 'POST', { prize_id: prizeId });
-      if (r.ok) { notify('Подарок будет выдан в ближайшее время'); refreshUser(); }
+      if (r.ok) { notify('Подарок будет выдан в ближайшее время'); refreshUser(); refreshPrizes(); }
     } catch (e: any) { notify(e.message || 'Ошибка'); }
   };
 
@@ -195,6 +195,7 @@ export const App: React.FC = () => {
     if (won.type !== 'nothing') setShowRes(true);
     else notify('Пусто — повезёт в следующий раз');
     refreshUser();
+    refreshPrizes();
   };
 
   const sellWonPrize = async () => {

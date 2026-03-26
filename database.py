@@ -101,6 +101,7 @@ class Database:
                     ("users", "free_used", "INTEGER DEFAULT 0"),
                     ("users", "updated_at", f"TEXT NOT NULL DEFAULT '{utc_now_iso()}'"),
                     ("users", "balance", "INTEGER DEFAULT 0"),
+                    ("users", "photo_url", "TEXT DEFAULT ''"),
                     ("prizes", "is_free", "INTEGER DEFAULT 0"),
                     ("prizes", "status", "TEXT DEFAULT 'active'"),
                 ]:
@@ -114,19 +115,20 @@ class Database:
             self._setup_done.add(self.path)
             log.info("Database ready: %s | journal_mode=%s", self.path, self.journal_mode)
 
-    async def ensure_user(self, uid: int, username: str, first_name: str) -> None:
+    async def ensure_user(self, uid: int, username: str, first_name: str, photo_url: str = "") -> None:
         async with self._connection() as db:
             now = utc_now_iso()
             await db.execute(
                 """
-                INSERT INTO users (user_id, username, first_name, joined_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO users (user_id, username, first_name, photo_url, joined_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     username = excluded.username,
                     first_name = excluded.first_name,
+                    photo_url = excluded.photo_url,
                     updated_at = excluded.updated_at
                 """,
-                (uid, username or "", first_name or "", now, now),
+                (uid, username or "", first_name or "", photo_url or "", now, now),
             )
             await db.commit()
 
@@ -305,7 +307,7 @@ class Database:
         async with self._connection() as db:
             async with db.execute(
                 """
-                SELECT p.*, u.first_name, u.username
+                SELECT p.*, u.first_name, u.username, u.photo_url
                 FROM prizes p
                 JOIN users u ON u.user_id = p.user_id
                 WHERE p.is_demo = 0
@@ -369,7 +371,7 @@ class Database:
         async with self._connection() as db:
             async with db.execute(
                 """
-                SELECT user_id, username, first_name, spins, wins, stars_spent
+                SELECT user_id, username, first_name, photo_url, spins, wins, stars_spent
                 FROM users
                 WHERE is_banned = 0
                 ORDER BY wins DESC, spins DESC, updated_at DESC

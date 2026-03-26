@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { tg, rarityClass } from '../utils';
 import { type Prize } from '../types';
 import { TgsPlayer } from './TgsPlayer';
@@ -14,81 +14,94 @@ interface Props {
   onSpinEnd: (p: Prize) => void;
 }
 
-const getRandomItem = (arr: Prize[]) => arr[Math.floor(Math.random() * arr.length)];
-
 export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [reel, setReel] = useState<Prize[]>([]);
+  
+  // 1. Create a shuffled block of all prizes ONCE.
+  const block = useMemo(() => {
+    if (!prizes.length) return [];
+    const arr = [...prizes];
+    // Simple deterministic shuffle so it feels random but fixed
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.sin(i * 999) * 10000) % (i + 1);
+      const absJ = Math.abs(j);
+      [arr[i], arr[absJ]] = [arr[absJ], arr[i]];
+    }
+    return arr;
+  }, [prizes]);
+
+  // 2. Repeat the block 8 times to form a long track
+  const reel = useMemo(() => {
+    if (!block.length) return [];
+    let r: Prize[] = [];
+    for (let i = 0; i < 8; i++) r = r.concat(block);
+    return r;
+  }, [block]);
+
+  const N = block.length;
   const [tx, setTx] = useState(0);
   const [dur, setDur] = useState(0);
   const [winIdx, setWinIdx] = useState(-1);
   const busy = useRef(false);
-
-  // Track the absolute stopping index across multiple spins
+  
+  // We track the logical stop index. Start slightly inside block 1.
   const lastStopRef = useRef(0);
 
   const getW = () => wrapRef.current?.clientWidth || 320;
 
-  // Initialize reel once
   useEffect(() => {
-    if (isSpinning || busy.current || !prizes.length || reel.length > 0) return;
-    const initialItems = Array.from({ length: 15 }, () => getRandomItem(prizes));
-    setReel(initialItems);
-    setDur(0);
-    // 3 items offset visually initially
-    const initTx = getW() / 2 - 3 * STEP - STEP / 2;
-    setTx(initTx);
-    lastStopRef.current = 3;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prizes]);
+    if (isSpinning || busy.current || !reel.length) return;
+    if (lastStopRef.current === 0) {
+      const initIdx = N + 2; 
+      setDur(0);
+      setTx(getW() / 2 - initIdx * STEP - STEP / 2);
+      lastStopRef.current = initIdx;
+    }
+  }, [reel, isSpinning]);
 
-  // Spin effect
   useEffect(() => {
-    if (!isSpinning || !winner || busy.current) return;
+    if (!isSpinning || !winner || busy.current || !reel.length) return;
     busy.current = true;
 
-    // We want to travel ~40 cards forward from the current stop index
-    const travelDistance = 38 + Math.floor(Math.random() * 5); // 38..42
-    const targetStop = lastStopRef.current + travelDistance;
-
-    // Pad the reel up to targetStop + 10 items (so it doesn't look empty at the end)
-    setReel(prev => {
-      const needed = targetStop + 10 - prev.length;
-      const extra = Array.from({ length: Math.max(0, needed) }, (_, i) => {
-        // Drop the winner exactly at targetStop
-        if (prev.length + i === targetStop) return winner;
-        return getRandomItem(prizes);
-      });
-      return [...prev, ...extra];
-    });
-
+    // Since the track repeats, we seamlessly jump back to Block 1 
+    // to give us plenty of room to spin forward without adding new DOM nodes!
+    const baseIdx = lastStopRef.current % N;
+    const startIdx = N + baseIdx; // Block 1 equivalent
+    
+    // Jump instantly
+    setDur(0);
+    setTx(getW() / 2 - startIdx * STEP - STEP / 2);
     setWinIdx(-1);
+
+    // Find the target winner in Block 5 or 6
+    const targetBase = block.findIndex(p => p.key === winner.key);
+    // Fallback if not found
+    const safeTargetBase = targetBase >= 0 ? targetBase : 0;
     
-    // Animate to new target
-    const targetTx = getW() / 2 - targetStop * STEP - STEP / 2;
-    
-    // Small timeout to ensure DOM paints the new reel items before transitioning
-    setTimeout(() => {
-      setDur(5.8);
-      setTx(targetTx);
-      lastStopRef.current = targetStop;
+    const targetIdx = safeTargetBase + N * (4 + Math.floor(Math.random() * 2)); 
 
-      // Haptic escalation
-      let t = 0;
-      const hap = setInterval(() => {
-        t++;
-        tg?.HapticFeedback?.impactOccurred?.(t < 18 ? 'light' : t < 36 ? 'medium' : 'heavy');
-      }, 110);
+    // Wait 2 frames so the instant jump renders, then spin!
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setDur(5.8);
+        setTx(getW() / 2 - targetIdx * STEP - STEP / 2);
+        lastStopRef.current = targetIdx;
 
-      setTimeout(() => {
-        clearInterval(hap);
-        setWinIdx(targetStop);
-        tg?.HapticFeedback?.notificationOccurred?.('success');
-        busy.current = false;
-        onSpinEnd(winner);
-      }, 6000);
-    }, 50);
+        let t = 0;
+        const hap = setInterval(() => {
+          t++;
+          tg?.HapticFeedback?.impactOccurred?.(t < 20 ? 'light' : t < 40 ? 'medium' : 'heavy');
+        }, 110);
 
+        setTimeout(() => {
+          clearInterval(hap);
+          setWinIdx(targetIdx);
+          tg?.HapticFeedback?.notificationOccurred?.('success');
+          busy.current = false;
+          onSpinEnd(winner);
+        }, 6000);
+      });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpinning, winner]);
 
@@ -106,7 +119,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
       >
         {reel.map((item, i) => (
           <div
-            key={`${i}-${item.key}`}
+            key={i} // IMPORTANT: key is index. React won't remount nodes.
             className={`reel-card r-${rarityClass(item.rarity)}${i === winIdx ? ' --win' : ''}`}
           >
             {item.tgs ? (

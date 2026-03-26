@@ -1014,30 +1014,6 @@ button { cursor: pointer; }
 
 .win-sheet { overflow: visible; padding: 16px 16px calc(24px + var(--safe-b)); }
 
-/* Confetti */
-.confetti {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 60px;
-  pointer-events: none;
-  overflow: hidden;
-}
-.confetti-dot {
-  position: absolute;
-  top: -10px;
-  width: 6px; height: 6px;
-  border-radius: 2px;
-  animation: confettiFall 1.4s var(--ease) forwards;
-}
-@keyframes confettiFall {
-  0%   { top: -10px; opacity: 1; transform: rotate(0); }
-  100% { top: 80px; opacity: 0; transform: rotate(360deg); }
-}
-.c-0 { background: #fbbf24; }
-.c-1 { background: #c084fc; }
-.c-2 { background: #5b9cf6; }
-.c-3 { background: #4ade80; }
-
 /* Result */
 .res {
   text-align: center;
@@ -1416,18 +1392,4 @@ button { cursor: pointer; }
 .pod-delay-1 { animation-delay: 60ms; }
 .pod-delay-2 { animation-delay: 90ms; }
 .pod-empty   { visibility: hidden; }
-
-/* Confetti positions (12 dots) — left% + animation delay */
-.confetti-pos-0  { left: 6%;  animation-delay: 0ms;   }
-.confetti-pos-1  { left: 14%; animation-delay: 50ms;  }
-.confetti-pos-2  { left: 22%; animation-delay: 100ms; }
-.confetti-pos-3  { left: 30%; animation-delay: 150ms; }
-.confetti-pos-4  { left: 38%; animation-delay: 200ms; }
-.confetti-pos-5  { left: 46%; animation-delay: 250ms; }
-.confetti-pos-6  { left: 54%; animation-delay: 300ms; }
-.confetti-pos-7  { left: 62%; animation-delay: 350ms; }
-.confetti-pos-8  { left: 70%; animation-delay: 400ms; }
-.confetti-pos-9  { left: 78%; animation-delay: 450ms; }
-.confetti-pos-10 { left: 86%; animation-delay: 500ms; }
-.confetti-pos-11 { left: 93%; animation-delay: 550ms; }
 
