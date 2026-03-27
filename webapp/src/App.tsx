@@ -258,9 +258,9 @@ export const App: React.FC = () => {
           />
         )}
         {activeScreen === 'inventory' && (
-          <InventoryPage prizes={boot.prizes} catalog={boot.prizes_catalog} onSell={doSell} onWithdraw={doWithdraw} refreshPrizes={refreshPrizes} />
+          <InventoryPage prizes={boot.prizes} catalog={boot.prizes_catalog} onSell={doSell} onWithdraw={doWithdraw} />
         )}
-        {activeScreen === 'top' && <LeaderboardPage rows={boot.leaderboard} />}
+        {activeScreen === 'top' && <LeaderboardPage rows={boot.leaderboard} myUserId={boot.user.user_id} />}
         {activeScreen === 'profile' && (
           <ProfilePage user={boot.user} isOwner={boot.is_owner}
             onTopup={() => setShowTopup(true)} onAdmin={() => setShowAdmin(true)}

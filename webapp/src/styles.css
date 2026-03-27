@@ -719,7 +719,11 @@ button { cursor: pointer; }
 
 .pod-medal { font-size: 16px; margin-bottom: 2px; }
 .pod-name  { font-size: 11px; font-weight: 700; text-align: center; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pod-wins  { font-size: 10px; color: var(--w35); font-weight: 600; margin-bottom: 8px; }
+.pod-wins  { font-size: 10px; color: var(--w35); font-weight: 600; margin-bottom: 2px; }
+.pod-spins { font-size: 9px; color: var(--w20); font-weight: 500; margin-bottom: 8px; }
+
+.pod-me .pod-ava { border-color: rgba(251,191,36,0.5); box-shadow: 0 0 0 2px rgba(251,191,36,0.15); }
+.pod-me .pod-name { color: var(--c-legendary); }
 
 .pod-bar {
   width: 100%; border-radius: 6px 6px 0 0;
@@ -747,6 +751,12 @@ button { cursor: pointer; }
   border-radius: var(--r);
   animation: invIn 0.2s var(--ease) both;
 }
+
+.lb-row-me {
+  border-color: rgba(251,191,36,0.25);
+  background: rgba(251,191,36,0.04);
+}
+.lb-row-me .lb-name { color: var(--c-legendary); }
 
 .lb-rank {
   font-size: 13px; font-weight: 800;
@@ -883,8 +893,34 @@ button { cursor: pointer; }
 }
 
 .inv-date   { font-size: 9.5px; color: var(--w35); }
-.inv-status { font-size: 10px; font-weight: 600; color: var(--w35); }
-.inv-sold-lbl { font-size: 10px; font-weight: 600; color: var(--w35); }
+.inv-sold-lbl { font-size: 10px; font-weight: 700; color: var(--w35); }
+
+.inv-withdrawing-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #4ade80;
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.2);
+  border-radius: 7px;
+  padding: 5px 9px;
+  margin-top: 2px;
+}
+.inv-withdrawing-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #4ade80;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+
 
 .inv-btns {
   display: flex;

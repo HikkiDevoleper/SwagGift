@@ -94,6 +94,14 @@ async def check_subscription(uid: int) -> bool:
 async def startup() -> None:
     runtime_state.set_default_cost(DEFAULT_SPIN_COST)
     await db.setup()
+    # Restore weights that were saved by admin previously
+    saved_weights = await db.get_kv("prize_weights")
+    if saved_weights:
+        try:
+            update_weights(json.loads(saved_weights))
+            log.info("Restored prize weights from DB")
+        except Exception as exc:
+            log.warning("Could not restore weights: %s", exc)
     log.info("Server startup complete")
 
 
@@ -389,7 +397,9 @@ async def update_weights_api(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid weights")
     sanitized = {k: max(0, int(v)) for k, v in weights.items() if isinstance(k, str) and isinstance(v, (int, float))}
     update_weights(sanitized)
-    log.info("Weights updated: %s", sanitized)
+    # Persist so weights survive server restarts
+    await db.set_kv("prize_weights", json.dumps(sanitized))
+    log.info("Weights updated and persisted: %s", sanitized)
     return {"ok": True, "prizes": PRIZES, "total_weight": TOTAL_WEIGHT}
 
 

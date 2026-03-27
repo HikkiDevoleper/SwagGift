@@ -10,7 +10,6 @@ interface Props {
   catalog: Prize[];
   onSell: (id: number, key: string) => void;
   onWithdraw: (id: number) => void;
-  refreshPrizes?: () => void;
 }
 
 export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWithdraw }) => {
@@ -28,6 +27,9 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
     sold: prizes.filter(p => p.status === 'sold').length,
   };
 
+  const labelFor = (f: Filter) =>
+    f === 'all' ? 'Все' : f === 'withdrawing' ? '⏳ На выводе' : 'Продано';
+
   return (
     <div className="page fade-in" key="inv">
       <div className="pg-header">
@@ -43,7 +45,7 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
             className={cn('inv-tab', filter === f && 'on')}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? 'Все' : f === 'withdrawing' ? 'На выводе' : 'Продано'}
+            {labelFor(f)}
             <span className="inv-tab-cnt">{counts[f]}</span>
           </button>
         ))}
@@ -52,7 +54,7 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
       {filtered.length === 0 ? (
         <div className="empty">
           <span className="empty-icon">🎁</span>
-          <p>{prizes.length === 0 ? 'Ещё нет призов — крути и выигрывай' : 'Нет в этом разделе'}</p>
+          <p>{prizes.length === 0 ? 'Ещё нет призов — крути и выигрывай' : 'Нет призов в этом разделе'}</p>
         </div>
       ) : (
         <div className="inv-grid">
@@ -64,8 +66,12 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
             return (
               <div
                 key={item.id || i}
-                className={cn('inv-item', `r-item-${rarityClass(item.rarity)}`, isW && 'withdrawing', isSold && 'sold')}
-                style={{ animationDelay: `${i * 30}ms` }}
+                className={cn(
+                  'inv-item',
+                  `r-item-${rarityClass(item.rarity)}`,
+                  isW && 'withdrawing',
+                  isSold && 'sold',
+                )}
               >
                 <div className="inv-sticker">
                   {cat?.tgs ? (
@@ -82,9 +88,12 @@ export const InventoryPage: React.FC<Props> = ({ prizes, catalog, onSell, onWith
                 <span className="inv-date">{formatDate(item.date)}</span>
 
                 {isW ? (
-                  <span className="inv-status">⏳ Выводится…</span>
+                  <div className="inv-withdrawing-badge">
+                    <span className="inv-withdrawing-dot" />
+                    Ожидает выдачи
+                  </div>
                 ) : isSold ? (
-                  <span className="inv-sold-lbl">Продано</span>
+                  <span className="inv-sold-lbl">✓ Продано</span>
                 ) : item.key !== 'nothing' && (
                   <div className="inv-btns">
                     <button className="inv-btn" onClick={() => onWithdraw(item.id)}>

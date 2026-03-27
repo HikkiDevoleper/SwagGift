@@ -17,15 +17,14 @@ interface Props {
 export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   
-  // 1. Create a shuffled block of all prizes ONCE.
+  // 1. Create a randomly shuffled block of all prizes ONCE per mount.
   const block = useMemo(() => {
     if (!prizes.length) return [];
     const arr = [...prizes];
-    // Simple deterministic shuffle so it feels random but fixed
+    // Fisher-Yates shuffle with true randomness
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.sin(i * 999) * 10000) % (i + 1);
-      const absJ = Math.abs(j);
-      [arr[i], arr[absJ]] = [arr[absJ], arr[i]];
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
   }, [prizes]);

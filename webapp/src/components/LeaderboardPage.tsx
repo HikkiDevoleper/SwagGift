@@ -4,9 +4,10 @@ import { type LeaderboardRow } from '../types';
 
 interface Props {
   rows: LeaderboardRow[];
+  myUserId?: number;
 }
 
-export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
+export const LeaderboardPage: React.FC<Props> = ({ rows, myUserId }) => (
   <div className="page fade-in" key="top">
     <div className="pg-header">
       <h1 className="pg-title">Топ игроков</h1>
@@ -22,9 +23,9 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
       <>
         {/* ── Podium: top 3 ── */}
         <div className="podium">
-          {/* 2nd — only if exists */}
+          {/* 2nd */}
           {rows[1] ? (
-            <div className="podium-slot podium-2 pod-delay-1">
+            <div className={`podium-slot podium-2 pod-delay-1${rows[1].user_id === myUserId ? ' pod-me' : ''}`}>
               <div className="pod-ava">
                 {rows[1].photo_url
                   ? <img src={rows[1].photo_url} alt="" />
@@ -34,11 +35,12 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
               <div className="pod-medal">🥈</div>
               <div className="pod-name">{rows[1].first_name || rows[1].username || 'Игрок'}</div>
               <div className="pod-wins">{rows[1].wins} 🎁</div>
+              <div className="pod-spins">{rows[1].spins} спинов</div>
             </div>
           ) : <div className="podium-slot podium-2 pod-empty" />}
 
           {/* 1st */}
-          <div className="podium-slot podium-1 pod-delay-0">
+          <div className={`podium-slot podium-1 pod-delay-0${rows[0].user_id === myUserId ? ' pod-me' : ''}`}>
             <div className="pod-crown">👑</div>
             <div className="pod-ava pod-ava-1">
               {rows[0].photo_url
@@ -49,11 +51,12 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
             <div className="pod-medal">🥇</div>
             <div className="pod-name">{rows[0].first_name || rows[0].username || 'Игрок'}</div>
             <div className="pod-wins">{rows[0].wins} 🎁</div>
+            <div className="pod-spins">{rows[0].spins} спинов</div>
           </div>
 
           {/* 3rd */}
           {rows[2] ? (
-            <div className="podium-slot podium-3 pod-delay-2">
+            <div className={`podium-slot podium-3 pod-delay-2${rows[2].user_id === myUserId ? ' pod-me' : ''}`}>
               <div className="pod-ava">
                 {rows[2].photo_url
                   ? <img src={rows[2].photo_url} alt="" />
@@ -63,6 +66,7 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
               <div className="pod-medal">🥉</div>
               <div className="pod-name">{rows[2].first_name || rows[2].username || 'Игрок'}</div>
               <div className="pod-wins">{rows[2].wins} 🎁</div>
+              <div className="pod-spins">{rows[2].spins} спинов</div>
             </div>
           ) : <div className="podium-slot podium-3 pod-empty" />}
         </div>
@@ -75,7 +79,7 @@ export const LeaderboardPage: React.FC<Props> = ({ rows }) => (
               {rows.slice(3).map((r, i) => (
                 <div
                   key={r.user_id || i}
-                  className={`lb-row lb-row-delay-${Math.min(i, 6)}`}
+                  className={`lb-row lb-row-delay-${Math.min(i, 6)}${r.user_id === myUserId ? ' lb-row-me' : ''}`}
                 >
                   <span className="lb-rank">{i + 4}</span>
                   <div className="lb-ava">

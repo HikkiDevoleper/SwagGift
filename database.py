@@ -92,6 +92,11 @@ class Database:
                     CREATE INDEX IF NOT EXISTS idx_prizes_won_at ON prizes(won_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at DESC);
                     CREATE INDEX IF NOT EXISTS idx_users_joined_at ON users(joined_at DESC);
+
+                    CREATE TABLE IF NOT EXISTS kv_store (
+                        key   TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    );
                     """
                 )
 
@@ -114,6 +119,23 @@ class Database:
 
             self._setup_done.add(self.path)
             log.info("Database ready: %s | journal_mode=%s", self.path, self.journal_mode)
+
+    # ── KV Store ──────────────────────────────────────
+
+    async def get_kv(self, key: str) -> Optional[str]:
+        async with self._connection() as db:
+            async with db.execute("SELECT value FROM kv_store WHERE key = ?", (key,)) as cur:
+                row = await cur.fetchone()
+                return row[0] if row else None
+
+    async def set_kv(self, key: str, value: str) -> None:
+        async with self._connection() as db:
+            await db.execute(
+                "INSERT INTO kv_store (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+            await db.commit()
 
     async def ensure_user(self, uid: int, username: str, first_name: str, photo_url: str = "") -> None:
         async with self._connection() as db:
