@@ -106,18 +106,48 @@ export const AdminSheet: React.FC<Props> = ({
         </div>
 
         {/* Weights */}
-        <div className="wt-lbl">Шансы призов</div>
+        <div className="wt-lbl-group">
+          <div className="wt-lbl">Шансы призов</div>
+          <div className={`wt-total${total === 100 ? ' ok' : ''}`}>
+            Сумма: <b>{total}</b> / 100
+          </div>
+        </div>
+
+        {total !== 100 && (
+          <button 
+            className="btn btn-outline btn-xs btn-wt-normalize" 
+            onClick={() => {
+              if (total === 0) return;
+              const newWeights: Record<string, number> = {};
+              prizes.forEach(p => {
+                newWeights[p.key] = Math.round((weights[p.key] / total) * 100);
+              });
+              const newTotal = Object.values(newWeights).reduce((a, b) => a + b, 0);
+              const diff = 100 - newTotal;
+              if (diff !== 0 && prizes.length > 0) {
+                newWeights[prizes[prizes.length - 1].key] += diff;
+              }
+              setWeights(newWeights);
+              setDirty(true);
+            }}
+          >
+            Нормализовать до 100%
+          </button>
+        )}
+
         {prizes.map(p => (
           <div key={p.key} className="wt-row">
             {p.tgs ? (
-              <div style={{ flexShrink: 0, marginRight: 6 }}>
+              <div className="wt-tgs">
                 <TgsPlayer src={`/gifts/${p.tgs}`} size={18} autoplay={false} />
               </div>
             ) : (
               <span className="wt-emoji">{p.emoji}</span>
             )}
             <span className="wt-name">{p.name}</span>
-            <span className="wt-pct">{total > 0 ? ((weights[p.key] / total) * 100).toFixed(0) : 0}%</span>
+            <span className={`wt-pct${total === 100 ? ' ok' : ''}`}>
+              {total > 0 ? ((weights[p.key] / total) * 100).toFixed(0) : 0}%
+            </span>
             <input
               className="wt-input"
               type="number" min={0}
@@ -130,7 +160,7 @@ export const AdminSheet: React.FC<Props> = ({
             />
           </div>
         ))}
-        <div style={{ paddingBottom: 60 }} />
+        <div className="sheet-pad" />
       </div>
     </>
   );

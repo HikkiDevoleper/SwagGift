@@ -1307,11 +1307,33 @@ button { cursor: pointer; }
 }
 .tgl.on .tgl-dot { transform: translateX(17px); background: #000; }
 
+.wt-lbl-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 0 8px;
+}
 .wt-lbl {
   font-size: 10px; font-weight: 700;
   color: var(--w35); text-transform: uppercase;
-  letter-spacing: 0.6px; margin: 14px 0 6px;
+  letter-spacing: 0.6px; margin: 0;
 }
+.wt-total {
+  font-size: 10px; font-weight: 700;
+  color: var(--w35); text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 3px 10px;
+  background: var(--s2);
+  border-radius: 6px;
+  border: 1px solid var(--w07);
+}
+.wt-total.ok {
+  color: #4ade80;
+  background: rgba(74,222,128,0.08);
+  border-color: rgba(74,222,128,0.2);
+}
+.wt-total b { color: var(--w); }
+
 .wt-row {
   display: flex;
   align-items: center;
@@ -1337,7 +1359,27 @@ button { cursor: pointer; }
 }
 .wt-input:focus { border-color: var(--w35); }
 
-.wt-pct { font-size: 11px; color: var(--w35); font-weight: 600; width: 30px; text-align: right; }
+.wt-pct { font-size: 11px; color: var(--w35); font-weight: 600; width: 34px; text-align: right; }
+.wt-pct.ok { color: #4ade80; }
+
+.btn-xs {
+  width: auto;
+  padding: 5px 10px;
+  font-size: 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.btn-wt-normalize {
+  margin-bottom: 12px;
+}
+
+.wt-tgs {
+  flex-shrink: 0;
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+}
 
 .cost-edit { display: flex; align-items: center; gap: 6px; }
 .admin-bal-row { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
@@ -1428,4 +1470,6 @@ button { cursor: pointer; }
 .pod-delay-1 { animation-delay: 60ms; }
 .pod-delay-2 { animation-delay: 90ms; }
 .pod-empty   { visibility: hidden; }
+
+.sheet-pad { padding-bottom: 60px; }
 
