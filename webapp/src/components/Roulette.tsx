@@ -17,120 +17,101 @@ interface Props {
 export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   
-  // 1. Create a randomly shuffled block of all prizes ONCE per mount.
-  const [shuffleTrigger, setShuffleTrigger] = useState(0);
+  const busy = useRef(false);
+  const [reel, setReel] = useState<Prize[]>([]);
+  const blockRef = useRef<Prize[]>([]);
+  const [tx, setTx] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [winIdx, setWinIdx] = useState(-1);
+  const lastStopRef = useRef(0);
 
-  // 1. Create a large, randomly shuffled pool of prizes.
-  // We include ALL prizes at least once to ensure the winner can always be found.
-  const block = useMemo(() => {
-    if (!prizes.length) return [];
-    
-    // Start with all prizes to guarantee presence
-    let pool = [...prizes];
-    
-    const totalW = prizes.reduce((a, b) => a + (b.weight || 1), 0);
-    const getRandomPrize = () => {
+  const getW = () => wrapRef.current?.clientWidth || 320;
+
+  // Helper to generate a truly random 100-item block
+  const generateBlock = (p: Prize[]) => {
+    if (!p.length) return [];
+    let pool = [...p];
+    const totalW = p.reduce((a, b) => a + (b.weight || 1), 0);
+    const getRandom = () => {
       let r = Math.random() * totalW;
-      for (const p of prizes) {
-        if (r < (p.weight || 1)) return p;
-        r -= (p.weight || 1);
+      for (const item of p) {
+        if (r < (item.weight || 1)) return item;
+        r -= (item.weight || 1);
       }
-      return prizes[0];
+      return p[0];
     };
-
-    // Add more prizes following their weight distribution (total 60 items)
-    const extraCount = 60 - prizes.length;
-    for (let i = 0; i < extraCount; i++) {
-      pool.push(getRandomPrize());
-    }
-
-    // Fisher-Yates shuffle with true randomness
+    // Fill up to 100 items for high variety
+    while (pool.length < 100) pool.push(getRandom());
+    // Fisher-Yates shuffle
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     return pool;
-  }, [prizes, shuffleTrigger]);
+  };
 
-  // 2. Repeat the block 8 times to form a long track
-  const reel = useMemo(() => {
-    if (!block.length) return [];
+  const updateReelState = (newBlock: Prize[]) => {
+    blockRef.current = newBlock;
     let r: Prize[] = [];
-    for (let i = 0; i < 8; i++) r = r.concat(block);
-    return r;
-  }, [block]);
-
-  const N = block.length;
-  const [tx, setTx] = useState(0);
-  const [dur, setDur] = useState(0);
-  const [winIdx, setWinIdx] = useState(-1);
-  const busy = useRef(false);
-  
-  // We track the logical stop index. Start slightly inside block 1.
-  const lastStopRef = useRef(0);
-
-  const getW = () => wrapRef.current?.clientWidth || 320;
+    for (let i = 0; i < 8; i++) r = r.concat(newBlock);
+    setReel(r);
+    return newBlock;
+  };
 
   useEffect(() => {
-    if (isSpinning || busy.current || !reel.length) return;
-    if (lastStopRef.current === 0) {
-      const initIdx = N + 2; 
-      setDur(0);
+    if (!prizes.length && !reel.length) return;
+    if (prizes.length && !reel.length) {
+      const b = updateReelState(generateBlock(prizes));
+      const N = b.length;
+      const initIdx = N + Math.floor(Math.random() * 10) + 2;
       setTx(getW() / 2 - initIdx * STEP - STEP / 2);
       lastStopRef.current = initIdx;
     }
-  }, [reel, isSpinning]);
+  }, [prizes]);
 
   useEffect(() => {
-    if (!isSpinning || !winner || busy.current || !reel.length) return;
+    if (!isSpinning || !winner || busy.current || !prizes.length) return;
     busy.current = true;
 
-    // Trigger a reshuffle for this spin
-    setShuffleTrigger(prev => prev + 1);
+    // 1. Generate a FRESH block for THIS spin
+    const newBlock = updateReelState(generateBlock(prizes));
+    const N = newBlock.length;
 
-    // Give it one tick to update the 'block' and 'reel' before we start the jump calculations
-    setTimeout(() => {
-      // Since the track repeats, we seamlessly jump back to Block 1 
-      // to give us plenty of room to spin forward without adding new DOM nodes!
-      const baseIdx = Math.floor(Math.random() * N); // Jump to a random starting position in Block 1
-      const startIdx = N + baseIdx; 
-      
-      // Jump instantly
-      setDur(0);
-      setTx(getW() / 2 - startIdx * STEP - STEP / 2);
-      setWinIdx(-1);
+    // 2. Jump instantly to a random starting position in Block 1
+    const baseIdx = Math.floor(Math.random() * N);
+    const startIdx = N + baseIdx;
+    
+    setDur(0);
+    setTx(getW() / 2 - startIdx * STEP - STEP / 2);
+    setWinIdx(-1);
 
-      // Find the target winner in Block 4 or 5
-      const targetBase = block.findIndex(p => p.key === winner.key);
-      const safeTargetBase = targetBase >= 0 ? targetBase : 0;
-      
-      // We spin far ahead to give a nice long animation
-      const targetIdx = safeTargetBase + N * (4 + Math.floor(Math.random() * 2)); 
+    // 3. Find target in Block 4 or 5
+    const targetBase = newBlock.findIndex(p => p.key === winner.key);
+    const safeTargetBase = targetBase >= 0 ? targetBase : 0;
+    const targetIdx = safeTargetBase + N * (4 + Math.floor(Math.random() * 2));
 
-      // Wait 2 frames so the instant jump renders, then spin!
+    // 4. Trigger animation on next frame
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setDur(5.8);
-          setTx(getW() / 2 - targetIdx * STEP - STEP / 2);
-          lastStopRef.current = targetIdx;
+        setDur(5.8);
+        setTx(getW() / 2 - targetIdx * STEP - STEP / 2);
+        lastStopRef.current = targetIdx;
 
-          let t = 0;
-          const hap = setInterval(() => {
-            t++;
-            tg?.HapticFeedback?.impactOccurred?.(t < 20 ? 'light' : t < 40 ? 'medium' : 'heavy');
-          }, 110);
+        let t = 0;
+        const hap = setInterval(() => {
+          t++;
+          tg?.HapticFeedback?.impactOccurred?.(t < 20 ? 'light' : t < 40 ? 'medium' : 'heavy');
+        }, 110);
 
-          setTimeout(() => {
-            clearInterval(hap);
-            setWinIdx(targetIdx);
-            tg?.HapticFeedback?.notificationOccurred?.('success');
-            busy.current = false;
-            onSpinEnd(winner);
-          }, 6000);
-        });
+        setTimeout(() => {
+          clearInterval(hap);
+          setWinIdx(targetIdx);
+          tg?.HapticFeedback?.notificationOccurred?.('success');
+          busy.current = false;
+          onSpinEnd(winner);
+        }, 6000);
       });
-    }, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    });
   }, [isSpinning, winner]);
 
   return (
