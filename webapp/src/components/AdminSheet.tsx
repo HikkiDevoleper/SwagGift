@@ -54,7 +54,16 @@ export const AdminSheet: React.FC<Props> = ({
     }
   };
 
-  const total = Object.values(weights).reduce((a, b) => a + Number(b), 0);
+  const realPrizes = prizes.filter(p => p.key !== 'nothing');
+  const totalUsed = realPrizes.reduce((acc, p) => acc + (weights[p.key] || 0), 0);
+  const nothingPct = Math.max(0, 100 - totalUsed);
+  const isInvalid = totalUsed > 100;
+
+  const handleSave = () => {
+    if (isInvalid) return;
+    onSaveWeights({ ...weights, nothing: nothingPct });
+    setDirty(false);
+  };
 
   return (
     <>
@@ -64,7 +73,13 @@ export const AdminSheet: React.FC<Props> = ({
         <div className="admin-hdr">
           <h2>Управление</h2>
           {dirty && (
-            <button className="btn btn-outline btn-sm" onClick={() => { onSaveWeights(weights); setDirty(false); }}>Сохранить</button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleSave}
+              disabled={isInvalid}
+            >
+              Сохранить
+            </button>
           )}
         </div>
 
@@ -106,61 +121,46 @@ export const AdminSheet: React.FC<Props> = ({
         </div>
 
         {/* Weights */}
-        <div className="wt-lbl-group">
-          <div className="wt-lbl">Шансы призов</div>
-          <div className={`wt-total${total === 100 ? ' ok' : ''}`}>
-            Сумма: <b>{total}</b> / 100
-          </div>
-        </div>
-
-        {total !== 100 && (
-          <button 
-            className="btn btn-outline btn-xs btn-wt-normalize" 
-            onClick={() => {
-              if (total === 0) return;
-              const newWeights: Record<string, number> = {};
-              prizes.forEach(p => {
-                newWeights[p.key] = Math.round((weights[p.key] / total) * 100);
-              });
-              const newTotal = Object.values(newWeights).reduce((a, b) => a + b, 0);
-              const diff = 100 - newTotal;
-              if (diff !== 0 && prizes.length > 0) {
-                newWeights[prizes[prizes.length - 1].key] += diff;
-              }
-              setWeights(newWeights);
-              setDirty(true);
-            }}
-          >
-            Нормализовать до 100%
-          </button>
-        )}
-
-        {prizes.map(p => (
+        <div className="wt-lbl">Шансы призов (проценты)</div>
+        {realPrizes.map(p => (
           <div key={p.key} className="wt-row">
             {p.tgs ? (
-              <div className="wt-tgs">
+              <div style={{ flexShrink: 0, marginRight: 6 }}>
                 <TgsPlayer src={`/gifts/${p.tgs}`} size={18} autoplay={false} />
               </div>
             ) : (
               <span className="wt-emoji">{p.emoji}</span>
             )}
             <span className="wt-name">{p.name}</span>
-            <span className={`wt-pct${total === 100 ? ' ok' : ''}`}>
-              {total > 0 ? ((weights[p.key] / total) * 100).toFixed(0) : 0}%
-            </span>
             <input
               className="wt-input"
-              type="number" min={0}
+              type="number" min={0} max={100}
               title={`Шанс: ${p.name}`} aria-label={`Шанс: ${p.name}`}
-              value={weights[p.key]}
+              value={weights[p.key] || 0}
               onChange={e => {
                 setWeights(w => ({ ...w, [p.key]: parseInt(e.target.value) || 0 }));
                 setDirty(true);
               }}
             />
+            <span className="wt-pct">%</span>
           </div>
         ))}
-        <div className="sheet-pad" />
+
+        <div className="wt-row" style={{ marginTop: 10, opacity: 0.7 }}>
+          <span className="wt-emoji">💨</span>
+          <span className="wt-name">Пусто (вычисляется авто)</span>
+          <span className="wt-pct" style={{ color: isInvalid ? 'red' : 'inherit' }}>
+            {nothingPct}%
+          </span>
+        </div>
+
+        {isInvalid && (
+          <div style={{ color: 'red', fontSize: '10px', marginTop: '10px', textAlign: 'center' }}>
+            Ошибка: Сумма шансов превышает 100% ({totalUsed}%)
+          </div>
+        )}
+
+        <div style={{ paddingBottom: 60 }} />
       </div>
     </>
   );

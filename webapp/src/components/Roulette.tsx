@@ -17,80 +17,88 @@ interface Props {
 export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEnd }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   
-  const busy = useRef(false);
-  const [reel, setReel] = useState<Prize[]>([]);
-  const blockRef = useRef<Prize[]>([]);
+  // 1. Create a randomly shuffled block of all prizes ONCE per mount.
+  const block = useMemo(() => {
+    if (!prizes.length) return [];
+    const arr = [...prizes];
+    // Fisher-Yates shuffle with true randomness
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }, [prizes]);
+
+  const [reel, setReel] = useState<Prize[]>(() => {
+    if (!block.length) return [];
+    let r: Prize[] = [];
+    // 10 blocks gives us plenty of room (approx 100-150 items)
+    for (let i = 0; i < 10; i++) r = r.concat(block);
+    return r;
+  });
+
+  const N = Math.max(1, block.length);
   const [tx, setTx] = useState(0);
   const [dur, setDur] = useState(0);
   const [winIdx, setWinIdx] = useState(-1);
+  const busy = useRef(false);
+  
+  // We track the logical stop index. Start slightly inside block 1.
   const lastStopRef = useRef(0);
 
   const getW = () => wrapRef.current?.clientWidth || 320;
 
-  // Helper to generate a truly random 100-item block
-  const generateBlock = (p: Prize[]) => {
-    if (!p.length) return [];
-    let pool = [...p];
-    const totalW = p.reduce((a, b) => a + (b.weight || 1), 0);
-    const getRandom = () => {
-      let r = Math.random() * totalW;
-      for (const item of p) {
-        if (r < (item.weight || 1)) return item;
-        r -= (item.weight || 1);
-      }
-      return p[0];
-    };
-    // Fill up to 100 items for high variety
-    while (pool.length < 100) pool.push(getRandom());
-    // Fisher-Yates shuffle
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    return pool;
-  };
-
-  const updateReelState = (newBlock: Prize[]) => {
-    blockRef.current = newBlock;
-    let r: Prize[] = [];
-    for (let i = 0; i < 8; i++) r = r.concat(newBlock);
-    setReel(r);
-    return newBlock;
-  };
-
   useEffect(() => {
-    if (!prizes.length && !reel.length) return;
-    if (prizes.length && !reel.length) {
-      const b = updateReelState(generateBlock(prizes));
-      const N = b.length;
-      const initIdx = N + Math.floor(Math.random() * 10) + 2;
+    if (isSpinning || busy.current || !reel.length) return;
+    if (lastStopRef.current === 0) {
+      const initIdx = N + 2; 
+      setDur(0);
       setTx(getW() / 2 - initIdx * STEP - STEP / 2);
       lastStopRef.current = initIdx;
     }
-  }, [prizes]);
+  }, [reel, isSpinning]);
 
   useEffect(() => {
-    if (!isSpinning || !winner || busy.current || !prizes.length) return;
+    if (!isSpinning || !winner || busy.current || !reel.length) return;
     busy.current = true;
 
-    // 1. Generate a FRESH block for THIS spin
-    const newBlock = updateReelState(generateBlock(prizes));
-    const N = newBlock.length;
-
-    // 2. Jump instantly to a random starting position in Block 1
-    const baseIdx = Math.floor(Math.random() * N);
-    const startIdx = N + baseIdx;
+    // 1. Calculate jump point and target point
+    const lastTarget = lastStopRef.current;
+    const baseIdx = lastTarget % N;
+    const startIdx = N + baseIdx; // Jump back to a safe low index (block 1 equivalent)
+    const targetIdx = startIdx + N * 4 + Math.floor(Math.random() * N); // Target is ~4-5 blocks ahead
     
+    // 2. Mutate reel before jumping
+    setReel(prev => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+
+      // Copy visual neighborhood of lastTarget exactly over startIdx
+      // so the instant jump is 100% visually seamless! (-5 to +5 items)
+      for (let i = -5; i <= 5; i++) {
+        if (startIdx + i >= 0 && lastTarget + i >= 0 && lastTarget + i < next.length) {
+          next[startIdx + i] = prev[lastTarget + i];
+        }
+      }
+
+      // Randomize everything ahead of the visible area
+      for (let i = startIdx + 6; i < next.length; i++) {
+        if (i !== targetIdx) {
+          next[i] = prizes[Math.floor(Math.random() * prizes.length)];
+        }
+      }
+
+      // Slot in the guaranteed winner
+      next[targetIdx] = winner;
+      return next;
+    });
+
+    // 3. Jump instantly to startIdx
     setDur(0);
     setTx(getW() / 2 - startIdx * STEP - STEP / 2);
     setWinIdx(-1);
 
-    // 3. Find target in Block 4 or 5
-    const targetBase = newBlock.findIndex(p => p.key === winner.key);
-    const safeTargetBase = targetBase >= 0 ? targetBase : 0;
-    const targetIdx = safeTargetBase + N * (4 + Math.floor(Math.random() * 2));
-
-    // 4. Trigger animation on next frame
+    // 4. Wait 2 frames so the instant jump and state flush renders, then spin!
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setDur(5.8);
@@ -112,6 +120,7 @@ export const Roulette: React.FC<Props> = ({ prizes, isSpinning, winner, onSpinEn
         }, 6000);
       });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpinning, winner]);
 
   return (
